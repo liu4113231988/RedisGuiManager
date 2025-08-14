@@ -83,9 +83,20 @@ namespace RedisGuiManager
 
             if (IPAddress.TryParse(textBox_ip.Text, out IPAddress address) == false)
             {
-                MessageBox.Show("Invalid IP address");
-
-                return false;
+                try
+                {
+                    IPAddress[] addresses = Dns.GetHostAddresses(textBox_ip.Text);
+                    if (addresses.Length == 0)
+                    {
+                        MessageBox.Show("Invalid IP address or URL");
+                        return false;
+                    }
+                }
+                catch
+                {
+                    MessageBox.Show("Invalid IP address or URL");
+                    return false;
+                }
             }
 
             if (int.TryParse(textBox_port.Text, out int port) == false)
