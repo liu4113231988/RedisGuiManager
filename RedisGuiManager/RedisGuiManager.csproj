@@ -2,19 +2,14 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <RootNamespace>RedisGuiManager</RootNamespace>
     <AssemblyName>RedisGuiManager</AssemblyName>
     <ApplicationIcon>redis.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>latest</LangVersion>
-    <Nullable>disable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
     <GenerateResourceWarnOnBinaryFormatterUse>false</GenerateResourceWarnOnBinaryFormatterUse>
-    <NoWarn>WFO1000</NoWarn>
     <AssemblyTitle>RedisGuiManager</AssemblyTitle>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <FileVersion>1.1.0.0</FileVersion>
@@ -52,16 +47,6 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="packages.config" />
-    <None Remove="App.config" />
-    <None Remove="WPFHexaEditor.dll" />
-    <None Remove="WPFHexaEditor.pdb" />
-    <None Remove="Properties\Settings.settings" />
-    <None Remove="Properties\Settings.Designer.cs" />
-    <None Remove="Properties\AssemblyInfo.cs" />
   </ItemGroup>
 
 </Project>

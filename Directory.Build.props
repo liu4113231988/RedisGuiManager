@@ -1,0 +1,11 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>WFO1000</NoWarn>
+  </PropertyGroup>
+
+</Project>
