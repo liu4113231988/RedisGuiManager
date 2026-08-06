@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>AutocompleteMenuNS</RootNamespace>
+    <AssemblyName>AutocompleteMenu</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>WFO1000</NoWarn>
+    <Description>AutocompleteMenu WinForms control (embedded from Pavel Torgashov's library, LGPLv3)</Description>
+  </PropertyGroup>
+
+</Project>
