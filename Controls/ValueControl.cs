@@ -161,15 +161,17 @@ namespace RedisGuiManager
                     if (box == null)
 					{
 					}
-                    else if (box is byte[])
+                    else if (box is byte[] bytes)
 					{
-                        MemoryStream stream = new MemoryStream((byte[])box);
-                        hexEditor_value.Stream = stream;
+                        string tempFile = System.IO.Path.GetTempFileName();
+                        System.IO.File.WriteAllBytes(tempFile, bytes);
+                        hexEditor_value.FileName = tempFile;
                     }
                     else
 					{
-                        MemoryStream stream = new MemoryStream(Encoding.UTF8.GetBytes(value.ToString()));
-                        hexEditor_value.Stream = stream;
+                        string tempFile = System.IO.Path.GetTempFileName();
+                        System.IO.File.WriteAllBytes(tempFile, Encoding.UTF8.GetBytes(value.ToString()));
+                        hexEditor_value.FileName = tempFile;
                     }
                 }
             }

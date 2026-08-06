@@ -10,7 +10,6 @@ using System.Windows.Forms;
 using System.IO;
 using Newtonsoft.Json.Linq;
 using StackExchange.Redis;
-using Microsoft.VisualBasic.CompilerServices;
 using System.Net;
 
 namespace RedisGuiManager

@@ -1,4 +1,3 @@
-using Microsoft.VisualBasic;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -629,7 +628,7 @@ namespace RedisGuiManager
 			// --- NOTES:
 			//   Additional complication is the fact that when wordwrap is enabled on the RTB, the wordwrapped text spills into the RTB.Lines collection,
 			//   so we need to split the text into lines ourselves, and use the Index of each zSplit-line's first character instead of the RTB's.
-			string[] zSplit = zParent.Text.Split(Constants.vbCrLf.ToCharArray());
+			string[] zSplit = zParent.Text.Split("\r\n".ToCharArray());
 
 			if (zSplit.Length < 2) {
 				//   Just one line in the text = one linenumber
@@ -640,7 +639,7 @@ namespace RedisGuiManager
 
 			} else {
 				//   Multiple lines, but store only those LineNumberItems for lines that are visible.
-				TimeSpan zTimeSpan = new TimeSpan(DateAndTime.Now.Ticks);
+				TimeSpan zTimeSpan = new TimeSpan(DateTime.Now.Ticks);
 				Point zPoint = new Point(0, 0);
 				int zStartIndex = 0;
 				int zSplitStartLine = 0;
@@ -657,10 +656,10 @@ namespace RedisGuiManager
 
 				//   zStartIndex now holds the index of a character in the first visible line from zParent.Text
 				//   Now it will be pointed at the first character of that line (chr(10) = Linefeed part of the vbCrLf constant)
-				zStartIndex = Math.Max(0, Math.Min(zParent.Text.Length - 1, zParent.Text.Substring(0, zStartIndex).LastIndexOf(Strings.Chr(10)) + 1));
+				zStartIndex = Math.Max(0, Math.Min(zParent.Text.Length - 1, zParent.Text.Substring(0, zStartIndex).LastIndexOf('\n') + 1));
 
 				//   We now need to find out which zSplit-line that character is in, by counting the vbCrlf appearances that come before it.
-				zSplitStartLine = Math.Max(0, zParent.Text.Substring(0, zStartIndex).Split(Constants.vbCrLf.ToCharArray()).Length - 1);
+				zSplitStartLine = Math.Max(0, zParent.Text.Substring(0, zStartIndex).Split("\r\n".ToCharArray()).Length - 1);
 
 				//   zStartIndex starts off pointing at the first character of the first visible line, and will be then be pointed to
 				//   the index of the first character on the next line.
@@ -672,7 +671,7 @@ namespace RedisGuiManager
 					//   For performance reasons, the list of LineNumberItems (zLNIs) is first built with only the location of its
 					//   itemrectangle being used. The height of those rectangles will be computed afterwards by comparing the items' Y coordinates.
 					zLNIs.Add(new LineNumberItem(zA + 1, new Rectangle(0, zPoint.Y - 1 + zParentInMe, this.Width, 1)));
-					if (zParentIsScrolling == true && DateAndTime.Now.Ticks > zTimeSpan.Ticks + 500000) {
+					if (zParentIsScrolling == true && DateTime.Now.Ticks > zTimeSpan.Ticks + 500000) {
 						//   The more lines there are in the RTB, the slower the RTB's .GetPositionFromCharIndex() method becomes
 						//   To avoid those delays from interfering with the scrollingspeed, this speedbased exit for is applied (0.05 sec)
 						//   zLNIs will have at least 1 item, and if that's the only one, then change its location to 0,0 to make it readable

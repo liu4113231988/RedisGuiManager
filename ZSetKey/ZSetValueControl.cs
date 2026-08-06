@@ -200,9 +200,8 @@ namespace RedisGuiManager
 
         private void show_context_menu(Control c, Point p)
         {
-            ContextMenu contextMenu = new ContextMenu();
-            Menu.MenuItemCollection m = contextMenu.MenuItems;
-            m.Add(new MenuItem("Json viewer", new EventHandler(this.CM_json_viewer)));
+            ContextMenuStrip contextMenu = new ContextMenuStrip();
+            contextMenu.Items.Add("Json viewer", null, new EventHandler(this.CM_json_viewer));
 
             contextMenu.Show(c, p);
         }

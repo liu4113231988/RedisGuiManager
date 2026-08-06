@@ -1,3 +1,5 @@
+using WpfHexEditor.HexEditor;
+
 namespace RedisGuiManager
 {
 	partial class ValueControl
@@ -40,7 +42,7 @@ namespace RedisGuiManager
 			this.linkLabel_search = new System.Windows.Forms.LinkLabel();
 			this.checkBox_case_sensitive = new System.Windows.Forms.CheckBox();
 			this.elementHost_hex = new System.Windows.Forms.Integration.ElementHost();
-			this.hexEditor_value = new WpfHexaEditor.HexEditor();
+			this.hexEditor_value = new HexEditor();
 			this.numericUpDown_byte_per_line = new System.Windows.Forms.NumericUpDown();
 			this.textBox_value = new RedisGuiManager.WordSelectTextBox();
 			this.label_byte_per_line = new System.Windows.Forms.Label();
@@ -277,7 +279,7 @@ namespace RedisGuiManager
 		private System.Windows.Forms.RadioButton radioButton_display_type_json;
 		private System.Windows.Forms.RadioButton radioButton_display_type_text;
 		private WordSelectTextBox textBox_value;
-		private WpfHexaEditor.HexEditor hexEditor_value;
+		private HexEditor hexEditor_value;
 		private System.Windows.Forms.TextBox textBox_search;
         private System.Windows.Forms.LinkLabel linkLabel_search;
         private System.Windows.Forms.CheckBox checkBox_case_sensitive;
