@@ -1,0 +1,68 @@
+using StackExchange.Redis;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace RedisGuiManager
+{
+    public partial class StreamValueInsertForm : Form
+    {
+        private RedisClient redisClient = null;
+        private string keyName;
+
+        public StreamValueInsertForm(RedisClient client, string keyName)
+        {
+            InitializeComponent();
+
+            if (Config.darkmode > 0)
+            {
+                Utils.DarkThemeForm(this);
+            }
+
+            this.redisClient = client;
+            this.keyName = keyName;
+            textBox_key.Text = keyName;
+            textBox_id.Text = "*";
+        }
+
+        private void button_save_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(textBox_field.Text))
+            {
+                MessageBox.Show("Field is empty");
+                return;
+            }
+
+            string id = string.IsNullOrEmpty(textBox_id.Text) ? "*" : textBox_id.Text;
+
+            try
+            {
+                var nameValues = new NameValueEntry[]
+                {
+                    new NameValueEntry(textBox_field.Text, textBox_value.Text)
+                };
+
+                var result = redisClient.Redis.StreamAdd(keyName, nameValues, id);
+
+                if (!result.IsNull)
+                {
+                    Close();
+                }
+                else
+                {
+                    MessageBox.Show("Add stream entry failed");
+                }
+            }
+            catch (RedisServerException ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}

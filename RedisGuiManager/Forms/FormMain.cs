@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using StackExchange.Redis;
 using System.Net;
@@ -578,6 +579,266 @@ namespace RedisGuiManager
             }
         }
 
+        private void server_info_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+
+            if (select.Tag is RedisClient client)
+            {
+                FormServerInfo form = new FormServerInfo(client);
+                form.Show();
+            }
+        }
+
+        private void slowlog_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+
+            if (select.Tag is RedisClient client)
+            {
+                FormSlowlog form = new FormSlowlog(client);
+                form.Show();
+            }
+        }
+
+        private void pubsub_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+
+            if (select.Tag is RedisClient client)
+            {
+                FormPubSub form = new FormPubSub(client);
+                form.Show();
+            }
+        }
+
+        private void export_data_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+
+            TreeNode dbNode = GetDbNode(select);
+            TreeNode redisNode = GetRedisNode(select);
+
+            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            {
+                using SaveFileDialog sfd = new SaveFileDialog();
+                sfd.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+                sfd.FileName = $"redis_export_db{dbSettings.DBNumber}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+
+                if (sfd.ShowDialog() != DialogResult.OK) return;
+
+                try
+                {
+                    var database = redisClient.GetDB(dbSettings.DBNumber);
+                    var keys = redisClient.RedisServer.Keys(dbSettings.DBNumber, "*", Config.scan_page_count);
+
+                    var exportData = new List<object>();
+                    int count = 0;
+
+                    foreach (var key in keys)
+                    {
+                        var keyType = database.KeyType(key);
+                        var entry = new System.Collections.Generic.Dictionary<string, object>
+                        {
+                            ["key"] = key.ToString(),
+                            ["type"] = keyType.ToString()
+                        };
+
+                        try
+                        {
+                            switch (keyType)
+                            {
+                                case RedisType.String:
+                                    entry["value"] = database.StringGet(key).ToString();
+                                    break;
+                                case RedisType.Hash:
+                                    var hashEntries = database.HashGetAll(key);
+                                    entry["value"] = hashEntries.Select(h => new { field = h.Name.ToString(), value = h.Value.ToString() }).ToList();
+                                    break;
+                                case RedisType.List:
+                                    entry["value"] = database.ListRange(key).Select(v => v.ToString()).ToList();
+                                    break;
+                                case RedisType.Set:
+                                    entry["value"] = database.SetMembers(key).Select(v => v.ToString()).ToList();
+                                    break;
+                                case RedisType.SortedSet:
+                                    var sortedEntries = database.SortedSetRangeByRankWithScores(key);
+                                    entry["value"] = sortedEntries.Select(s => new { member = s.Element.ToString(), score = s.Score }).ToList();
+                                    break;
+                                case RedisType.Stream:
+                                    var streamEntries = database.StreamRange(key);
+                                    entry["value"] = streamEntries.Select(s => new { id = s.Id.ToString(), fields = s.Values.Select(v => new { name = v.Name.ToString(), value = v.Value.ToString() }).ToList() }).ToList();
+                                    break;
+                                default:
+                                    entry["value"] = null;
+                                    break;
+                            }
+
+                            var ttl = database.KeyTimeToLive(key);
+                            entry["ttl"] = ttl.HasValue ? (long?)ttl.Value.TotalSeconds : null;
+                        }
+                        catch (Exception ex)
+                        {
+                            entry["error"] = ex.Message;
+                        }
+
+                        exportData.Add(entry);
+                        count++;
+
+                        if (count % 100 == 0)
+                        {
+                            toolStripStatusLabel1.Text = $"Exporting... {count} keys";
+                            Application.DoEvents();
+                        }
+                    }
+
+                    string json = JsonConvert.SerializeObject(exportData, Formatting.Indented);
+                    System.IO.File.WriteAllText(sfd.FileName, json);
+
+                    MessageBox.Show($"Export completed!\r\n\r\nKeys: {count}\r\nFile: {sfd.FileName}", "Export Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    toolStripStatusLabel1.Text = $"Exported {count} keys";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Export failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void import_data_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+
+            TreeNode dbNode = GetDbNode(select);
+            TreeNode redisNode = GetRedisNode(select);
+
+            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            {
+                using OpenFileDialog ofd = new OpenFileDialog();
+                ofd.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+
+                if (ofd.ShowDialog() != DialogResult.OK) return;
+
+                try
+                {
+                    string json = System.IO.File.ReadAllText(ofd.FileName);
+                    var importData = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(json);
+
+                    if (importData == null || importData.Count == 0)
+                    {
+                        MessageBox.Show("No data to import", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    if (MessageBox.Show($"Import {importData.Count} keys to DB {dbSettings.DBNumber}?", "Confirm Import", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                        return;
+
+                    var database = redisClient.GetDB(dbSettings.DBNumber);
+                    int success = 0, fail = 0;
+
+                    for (int i = 0; i < importData.Count; i++)
+                    {
+                        var entry = importData[i];
+                        string key = entry["key"]?.ToString();
+                        string type = entry["type"]?.ToString();
+
+                        if (string.IsNullOrEmpty(key)) { fail++; continue; }
+
+                        try
+                        {
+                            var value = entry["value"];
+                            string valueJson = JsonConvert.SerializeObject(value);
+
+                            switch (type)
+                            {
+                                case "String":
+                                    database.StringSet(key, value?.ToString());
+                                    break;
+                                case "Hash":
+                                    var hashItems = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(valueJson);
+                                    if (hashItems != null && hashItems.Count > 0)
+                                    {
+                                        var hashEntries = hashItems.Select(h => new HashEntry(h["field"].ToString(), h["value"].ToString())).ToArray();
+                                        database.HashSet(key, hashEntries);
+                                    }
+                                    break;
+                                case "List":
+                                    var listItems = JsonConvert.DeserializeObject<List<string>>(valueJson);
+                                    if (listItems != null && listItems.Count > 0)
+                                    {
+                                        database.ListRightPush(key, listItems.Select(v => (RedisValue)v).ToArray());
+                                    }
+                                    break;
+                                case "Set":
+                                    var setItems = JsonConvert.DeserializeObject<List<string>>(valueJson);
+                                    if (setItems != null && setItems.Count > 0)
+                                    {
+                                        database.SetAdd(key, setItems.Select(v => (RedisValue)v).ToArray());
+                                    }
+                                    break;
+                                case "SortedSet":
+                                    var zsetItems = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(valueJson);
+                                    if (zsetItems != null && zsetItems.Count > 0)
+                                    {
+                                        var sortedEntries = zsetItems.Select(z => new SortedSetEntry(z["member"].ToString(), double.Parse(z["score"].ToString()))).ToArray();
+                                        database.SortedSetAdd(key, sortedEntries);
+                                    }
+                                    break;
+                                case "Stream":
+                                    var streamItems = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(valueJson);
+                                    if (streamItems != null && streamItems.Count > 0)
+                                    {
+                                        foreach (var si in streamItems)
+                                        {
+                                            string id = si["id"]?.ToString() ?? "*";
+                                            var fields = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(JsonConvert.SerializeObject(si["fields"]));
+                                            if (fields != null && fields.Count > 0)
+                                            {
+                                                var nameValues = fields.Select(f => new NameValueEntry(f["name"].ToString(), f["value"].ToString())).ToArray();
+                                                database.StreamAdd(key, nameValues, id);
+                                            }
+                                        }
+                                    }
+                                    break;
+                            }
+
+                            if (entry.TryGetValue("ttl", out var ttlObj) && ttlObj != null)
+                            {
+                                if (long.TryParse(ttlObj.ToString(), out long ttlSec) && ttlSec > 0)
+                                {
+                                    database.KeyExpire(key, TimeSpan.FromSeconds(ttlSec));
+                                }
+                            }
+
+                            success++;
+                        }
+                        catch
+                        {
+                            fail++;
+                        }
+
+                        if ((i + 1) % 100 == 0)
+                        {
+                            toolStripStatusLabel1.Text = $"Importing... {i + 1}/{importData.Count}";
+                            Application.DoEvents();
+                        }
+                    }
+
+                    MessageBox.Show($"Import completed!\r\n\r\nSuccess: {success}\r\nFailed: {fail}", "Import Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    toolStripStatusLabel1.Text = $"Imported {success} keys";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Import failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
         private void edit_connection_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
@@ -968,6 +1229,11 @@ namespace RedisGuiManager
                                     ZSetKeySelect(redisClient, select);
                                 }
                                 break;
+                                case StackExchange.Redis.RedisType.Stream:
+                                {
+                                    StreamKeySelect(redisClient, select);
+                                }
+                                break;
                                 default:
                                 {
                                     MessageBox.Show($"key {select.Text} is not exist");
@@ -1091,22 +1357,30 @@ namespace RedisGuiManager
 
                 if (select.Nodes.Count == 0 || reload)
                 {
-                    if (redisClient.Settings.hide_default_dbs == false)
+                    if (redisClient.Settings.use_cluster)
                     {
-                        for (int i = 0; i < 16; i++)
+                        // Cluster mode only supports db 0
+                        AddTreeNode_DB(redisClient, 0, select);
+                    }
+                    else
+                    {
+                        if (redisClient.Settings.hide_default_dbs == false)
                         {
-                            AddTreeNode_DB(redisClient, i, select);
+                            for (int i = 0; i < 16; i++)
+                            {
+                                AddTreeNode_DB(redisClient, i, select);
+                            }
+                        }
+
+                        if (redisClient.Settings.additional_dbs != null)
+                        {
+                            redisClient.Settings.additional_dbs.Sort();
+                            foreach (int dbNum in redisClient.Settings.additional_dbs)
+                            {
+                                AddTreeNode_DB(redisClient, dbNum, select);
+                            }
                         }
                     }
-
-                    if (redisClient.Settings.additional_dbs != null)
-					{
-                        redisClient.Settings.additional_dbs.Sort();
-                        foreach (int dbNum in redisClient.Settings.additional_dbs)
-						{
-                            AddTreeNode_DB(redisClient, dbNum, select);
-						}
-					}
 
                     if (redisClient.SelectDB(0).IsSuccess)
                     {
@@ -1529,7 +1803,22 @@ namespace RedisGuiManager
             }
         }
 
-		// Load / Save / Add servers
+        private void StreamKeySelect(RedisClient client, TreeNode key)
+        {
+            if (userControl == null || (userControl as StreamValueControl) == null)
+            {
+                CreateRedisShowTagControl<StreamValueControl>();
+            }
+
+            if (userControl is StreamValueControl streamValueControl)
+            {
+                streamValueControl.MainForm = this;
+                streamValueControl.TargetNode = key;
+                streamValueControl.SetNewKey(client, key.Text);
+            }
+        }
+
+        // Load / Save / Add servers
 		private void LoadRedisSettings()
         {
             treeView_server.Nodes.Clear();
@@ -1767,6 +2056,149 @@ namespace RedisGuiManager
             }
         }
 
+        private void view_ttl_toolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null || select.Tag is not RedisKey) return;
+
+            TreeNode dbNode = GetDbNode(select);
+            TreeNode redisNode = GetRedisNode(select);
+
+            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            {
+                var database = redisClient.GetDB(dbSettings.DBNumber);
+                var ttl = database.KeyTimeToLive(select.Text);
+
+                string message;
+                if (ttl == null)
+                {
+                    message = "Key has no associated TTL (permanent).";
+                }
+                else if (ttl.Value.TotalSeconds < 0)
+                {
+                    message = "Key has no associated TTL (permanent).";
+                }
+                else
+                {
+                    message = FormatTTL(ttl.Value);
+                }
+
+                MessageBox.Show(message, $"TTL of [{select.Text}]", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void set_ttl_toolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null || select.Tag is not RedisKey) return;
+
+            TreeNode dbNode = GetDbNode(select);
+            TreeNode redisNode = GetRedisNode(select);
+
+            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            {
+                var database = redisClient.GetDB(dbSettings.DBNumber);
+
+                using FormInputString formInput = new FormInputString();
+                formInput.TextInfo = "Set TTL (seconds), -1 = permanent, 0 = delete immediately";
+                formInput.InputValue = "";
+
+                if (formInput.ShowDialog() == DialogResult.OK)
+                {
+                    if (long.TryParse(formInput.InputValue, out long seconds))
+                    {
+                        if (seconds == -1)
+                        {
+                            if (database.KeyPersist(select.Text))
+                            {
+                                MessageBox.Show("TTL removed (key is now permanent).", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Failed to remove TTL.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                        else if (seconds == 0)
+                        {
+                            if (database.KeyDelete(select.Text))
+                            {
+                                var db_setting_node = get_db_setting_node(select);
+                                if (db_setting_node != null && db_setting_node.Tag is DbSettings dbs)
+                                {
+                                    dbs.Keys.Remove(select.Text);
+                                    FilterKeys(db_setting_node);
+                                    db_setting_node.ExpandAll();
+                                }
+                                MessageBox.Show("Key deleted (TTL=0).", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Failed to delete key.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                        else
+                        {
+                            if (database.KeyExpire(select.Text, TimeSpan.FromSeconds(seconds)))
+                            {
+                                var ttl = database.KeyTimeToLive(select.Text);
+                                string ttlStr = ttl != null ? FormatTTL(ttl.Value) : "permanent";
+                                MessageBox.Show($"TTL set successfully.\r\n\r\nKey: {select.Text}\r\nRemaining: {ttlStr}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Failed to set TTL.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Please enter a valid number.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private void remove_ttl_toolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null || select.Tag is not RedisKey) return;
+
+            TreeNode dbNode = GetDbNode(select);
+            TreeNode redisNode = GetRedisNode(select);
+
+            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            {
+                var database = redisClient.GetDB(dbSettings.DBNumber);
+
+                if (MessageBox.Show($"Remove TTL from key [{select.Text}]?\r\nThe key will become permanent.", "Remove TTL", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    if (database.KeyPersist(select.Text))
+                    {
+                        MessageBox.Show("TTL removed. Key is now permanent.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Failed to remove TTL.\r\nThe key may not exist or already has no TTL.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private static string FormatTTL(TimeSpan ttl)
+        {
+            if (ttl.TotalSeconds < 0) return "permanent (no TTL)";
+
+            int days = (int)ttl.TotalDays;
+            int hours = ttl.Hours;
+            int minutes = ttl.Minutes;
+            int seconds = ttl.Seconds;
+
+            if (days > 0) return $"{days}d {hours}h {minutes}m {seconds}s ({(long)ttl.TotalSeconds}s)";
+            if (hours > 0) return $"{hours}h {minutes}m {seconds}s ({(long)ttl.TotalSeconds}s)";
+            if (minutes > 0) return $"{minutes}m {seconds}s ({(long)ttl.TotalSeconds}s)";
+            return $"{seconds}s ({(long)ttl.TotalSeconds}s)";
+        }
+
         private void folder_query_window_toolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
@@ -1852,6 +2284,18 @@ namespace RedisGuiManager
 				case StackExchange.Redis.RedisType.SortedSet:
 				{
                     dst_db.SortedSetAdd(dst_key, src_db.SortedSetRangeByScoreWithScores(src_key));
+				}
+				break;
+				case StackExchange.Redis.RedisType.Stream:
+				{
+					var vals = src_db.StreamRange(src_key);
+					if (vals.Length > 0)
+					{
+						foreach (var entry in vals)
+						{
+							dst_db.StreamAdd(dst_key, entry.Values, entry.Id);
+						}
+					}
 				}
 				break;
 				default:

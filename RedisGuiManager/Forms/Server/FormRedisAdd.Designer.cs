@@ -53,6 +53,10 @@ namespace RedisGuiManager
             this.label_tunnel_key = new System.Windows.Forms.Label();
             this.textBox_tunnel_key = new System.Windows.Forms.TextBox();
             this.checkBox_use_ssh_key = new System.Windows.Forms.CheckBox();
+            this.checkBox_use_ssl = new System.Windows.Forms.CheckBox();
+            this.checkBox_use_cluster = new System.Windows.Forms.CheckBox();
+            this.label_cluster = new System.Windows.Forms.Label();
+            this.textBox_cluster_endpoints = new System.Windows.Forms.TextBox();
             this.groupBox_tunnel.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -171,6 +175,48 @@ namespace RedisGuiManager
             this.checkBox_use_tunnel.Text = "SSH Tunnel";
             this.checkBox_use_tunnel.UseVisualStyleBackColor = true;
             this.checkBox_use_tunnel.CheckedChanged += new System.EventHandler(this.checkBox_use_tunnel_CheckedChanged);
+            //
+            // checkBox_use_ssl
+            //
+            this.checkBox_use_ssl.AutoSize = true;
+            this.checkBox_use_ssl.Location = new System.Drawing.Point(200, 168);
+            this.checkBox_use_ssl.Name = "checkBox_use_ssl";
+            this.checkBox_use_ssl.Size = new System.Drawing.Size(100, 23);
+            this.checkBox_use_ssl.TabIndex = 13;
+            this.checkBox_use_ssl.Text = "SSL/TLS";
+            this.checkBox_use_ssl.UseVisualStyleBackColor = true;
+            //
+            // checkBox_use_cluster
+            //
+            this.checkBox_use_cluster.AutoSize = true;
+            this.checkBox_use_cluster.Location = new System.Drawing.Point(310, 168);
+            this.checkBox_use_cluster.Name = "checkBox_use_cluster";
+            this.checkBox_use_cluster.Size = new System.Drawing.Size(75, 23);
+            this.checkBox_use_cluster.TabIndex = 14;
+            this.checkBox_use_cluster.Text = "Cluster";
+            this.checkBox_use_cluster.UseVisualStyleBackColor = true;
+            this.checkBox_use_cluster.CheckedChanged += new System.EventHandler(this.checkBox_use_cluster_CheckedChanged);
+            //
+            // label_cluster
+            //
+            this.label_cluster.AutoSize = true;
+            this.label_cluster.Font = new System.Drawing.Font("Consolas", 12F);
+            this.label_cluster.Location = new System.Drawing.Point(32, 400);
+            this.label_cluster.Name = "label_cluster";
+            this.label_cluster.Size = new System.Drawing.Size(63, 19);
+            this.label_cluster.TabIndex = 15;
+            this.label_cluster.Text = "Nodes";
+            //
+            // textBox_cluster_endpoints
+            //
+            this.textBox_cluster_endpoints.Font = new System.Drawing.Font("Consolas", 11F);
+            this.textBox_cluster_endpoints.Location = new System.Drawing.Point(122, 397);
+            this.textBox_cluster_endpoints.Multiline = true;
+            this.textBox_cluster_endpoints.Name = "textBox_cluster_endpoints";
+            this.textBox_cluster_endpoints.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.textBox_cluster_endpoints.Size = new System.Drawing.Size(246, 60);
+            this.textBox_cluster_endpoints.TabIndex = 16;
+            this.textBox_cluster_endpoints.Enabled = false;
             // 
             // groupBox_tunnel
             // 
@@ -304,6 +350,10 @@ namespace RedisGuiManager
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.BackColor = System.Drawing.Color.White;
             this.ClientSize = new System.Drawing.Size(398, 511);
+            this.Controls.Add(this.textBox_cluster_endpoints);
+            this.Controls.Add(this.label_cluster);
+            this.Controls.Add(this.checkBox_use_cluster);
+            this.Controls.Add(this.checkBox_use_ssl);
             this.Controls.Add(this.groupBox_tunnel);
             this.Controls.Add(this.checkBox_use_tunnel);
             this.Controls.Add(this.checkBox_show_password);
@@ -361,5 +411,9 @@ namespace RedisGuiManager
         private System.Windows.Forms.CheckBox checkBox_use_ssh_key;
         private System.Windows.Forms.TextBox textBox_tunnel_key;
         private System.Windows.Forms.Label label_tunnel_key;
+        private System.Windows.Forms.CheckBox checkBox_use_ssl;
+        private System.Windows.Forms.CheckBox checkBox_use_cluster;
+        private System.Windows.Forms.Label label_cluster;
+        private System.Windows.Forms.TextBox textBox_cluster_endpoints;
     }
 }

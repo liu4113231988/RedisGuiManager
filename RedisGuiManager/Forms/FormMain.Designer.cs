@@ -46,7 +46,10 @@ namespace RedisGuiManager
 			this.toolStripSeparator3 = new System.Windows.Forms.ToolStripSeparator();
 			this.remove_keys_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.toolStripSeparator4 = new System.Windows.Forms.ToolStripSeparator();
-			this.remove_db_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.remove_db_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.dataIoSeparator = new System.Windows.Forms.ToolStripSeparator();
+            this.export_data_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.import_data_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.contextMenuStrip_redis = new System.Windows.Forms.ContextMenuStrip(this.components);
 			this.add_db_to_list_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.add_db_range_to_list_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -58,7 +61,11 @@ namespace RedisGuiManager
 			this.remove_keys_from_whole_dbs_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.toolStripSeparator2 = new System.Windows.Forms.ToolStripSeparator();
 			this.query_window_all_server_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.open_console_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.open_console_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.server_info_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.slowlog_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.pubsub_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.serverToolsSeparator = new System.Windows.Forms.ToolStripSeparator();
 			this.reload_server_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.edit_connection_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.disconnect_connection_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -66,12 +73,16 @@ namespace RedisGuiManager
 			this.contextMenuStrip_class = new System.Windows.Forms.ContextMenuStrip(this.components);
 			this.folder_query_window_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.contextMenuStrip_key = new System.Windows.Forms.ContextMenuStrip(this.components);
-			this.copy_key_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.delete_key_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.key_query_window_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.copy_key_to_db_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.copy_key_to_machine_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.migrate_keys_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.copy_key_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.delete_key_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.key_query_window_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.copy_key_to_db_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.copy_key_to_machine_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.migrate_keys_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.ttlSeparator = new System.Windows.Forms.ToolStripSeparator();
+            this.view_ttl_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.set_ttl_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.remove_ttl_toolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.treeView_server = new System.Windows.Forms.TreeViewEx();
 			this.statusStrip1.SuspendLayout();
 			((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
@@ -172,7 +183,10 @@ namespace RedisGuiManager
             this.migrate_keys_ToolStripMenuItem,
             this.remove_keys_ToolStripMenuItem,
             this.toolStripSeparator4,
-            this.remove_db_ToolStripMenuItem});
+            this.remove_db_ToolStripMenuItem,
+            this.dataIoSeparator,
+            this.export_data_ToolStripMenuItem,
+            this.import_data_ToolStripMenuItem});
 			this.contextMenuStrip_db.Name = "contextMenuStrip1";
 			this.contextMenuStrip_db.Size = new System.Drawing.Size(219, 208);
 			// 
@@ -243,7 +257,26 @@ namespace RedisGuiManager
 			this.remove_db_ToolStripMenuItem.Name = "remove_db_ToolStripMenuItem";
 			this.remove_db_ToolStripMenuItem.Size = new System.Drawing.Size(218, 24);
 			this.remove_db_ToolStripMenuItem.Text = "Remove DB from list";
-			this.remove_db_ToolStripMenuItem.Click += new System.EventHandler(this.remove_db_ToolStripMenuItem_Click);
+            this.remove_db_ToolStripMenuItem.Click += new System.EventHandler(this.remove_db_ToolStripMenuItem_Click);
+            //
+            // dataIoSeparator
+            //
+            this.dataIoSeparator.Name = "dataIoSeparator";
+            this.dataIoSeparator.Size = new System.Drawing.Size(215, 6);
+            //
+            // export_data_ToolStripMenuItem
+            //
+            this.export_data_ToolStripMenuItem.Name = "export_data_ToolStripMenuItem";
+            this.export_data_ToolStripMenuItem.Size = new System.Drawing.Size(218, 24);
+            this.export_data_ToolStripMenuItem.Text = "Export Data (JSON)";
+            this.export_data_ToolStripMenuItem.Click += new System.EventHandler(this.export_data_ToolStripMenuItem_Click);
+            //
+            // import_data_ToolStripMenuItem
+            //
+            this.import_data_ToolStripMenuItem.Name = "import_data_ToolStripMenuItem";
+            this.import_data_ToolStripMenuItem.Size = new System.Drawing.Size(218, 24);
+            this.import_data_ToolStripMenuItem.Text = "Import Data (JSON)";
+            this.import_data_ToolStripMenuItem.Click += new System.EventHandler(this.import_data_ToolStripMenuItem_Click);
 			// 
 			// contextMenuStrip_redis
 			// 
@@ -259,6 +292,10 @@ namespace RedisGuiManager
             this.toolStripSeparator2,
             this.query_window_all_server_ToolStripMenuItem,
             this.open_console_ToolStripMenuItem,
+            this.serverToolsSeparator,
+            this.server_info_ToolStripMenuItem,
+            this.slowlog_ToolStripMenuItem,
+            this.pubsub_ToolStripMenuItem,
             this.reload_server_ToolStripMenuItem,
             this.edit_connection_ToolStripMenuItem,
             this.disconnect_connection_ToolStripMenuItem,
@@ -346,7 +383,33 @@ namespace RedisGuiManager
 			this.open_console_ToolStripMenuItem.Name = "open_console_ToolStripMenuItem";
 			this.open_console_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
 			this.open_console_ToolStripMenuItem.Text = "Open console";
-			this.open_console_ToolStripMenuItem.Click += new System.EventHandler(this.open_console_ToolStripMenuItem_Click);
+            this.open_console_ToolStripMenuItem.Click += new System.EventHandler(this.open_console_ToolStripMenuItem_Click);
+            //
+            // serverToolsSeparator
+            //
+            this.serverToolsSeparator.Name = "serverToolsSeparator";
+            this.serverToolsSeparator.Size = new System.Drawing.Size(303, 6);
+            //
+            // server_info_ToolStripMenuItem
+            //
+            this.server_info_ToolStripMenuItem.Name = "server_info_ToolStripMenuItem";
+            this.server_info_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
+            this.server_info_ToolStripMenuItem.Text = "Server Info";
+            this.server_info_ToolStripMenuItem.Click += new System.EventHandler(this.server_info_ToolStripMenuItem_Click);
+            //
+            // slowlog_ToolStripMenuItem
+            //
+            this.slowlog_ToolStripMenuItem.Name = "slowlog_ToolStripMenuItem";
+            this.slowlog_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
+            this.slowlog_ToolStripMenuItem.Text = "Slowlog";
+            this.slowlog_ToolStripMenuItem.Click += new System.EventHandler(this.slowlog_ToolStripMenuItem_Click);
+            //
+            // pubsub_ToolStripMenuItem
+            //
+            this.pubsub_ToolStripMenuItem.Name = "pubsub_ToolStripMenuItem";
+            this.pubsub_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
+            this.pubsub_ToolStripMenuItem.Text = "Pub/Sub";
+            this.pubsub_ToolStripMenuItem.Click += new System.EventHandler(this.pubsub_ToolStripMenuItem_Click);
 			// 
 			// reload_server_ToolStripMenuItem
 			// 
@@ -399,12 +462,16 @@ namespace RedisGuiManager
 			// 
 			// contextMenuStrip_key
 			// 
-			this.contextMenuStrip_key.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.contextMenuStrip_key.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.copy_key_ToolStripMenuItem,
             this.copy_key_to_db_ToolStripMenuItem,
             this.copy_key_to_machine_ToolStripMenuItem,
             this.delete_key_toolStripMenuItem,
-            this.key_query_window_toolStripMenuItem});
+            this.key_query_window_toolStripMenuItem,
+            this.ttlSeparator,
+            this.view_ttl_toolStripMenuItem,
+            this.set_ttl_toolStripMenuItem,
+            this.remove_ttl_toolStripMenuItem});
 			this.contextMenuStrip_key.Name = "contextMenuStrip_class";
 			this.contextMenuStrip_key.Size = new System.Drawing.Size(186, 124);
 			// 
@@ -454,7 +521,33 @@ namespace RedisGuiManager
 			this.migrate_keys_ToolStripMenuItem.Name = "migrate_keys_ToolStripMenuItem";
 			this.migrate_keys_ToolStripMenuItem.Size = new System.Drawing.Size(218, 24);
 			this.migrate_keys_ToolStripMenuItem.Text = "Migrate Keys";
-			this.migrate_keys_ToolStripMenuItem.Click += new System.EventHandler(this.migrate_keys_ToolStripMenuItem_Click);
+            this.migrate_keys_ToolStripMenuItem.Click += new System.EventHandler(this.migrate_keys_ToolStripMenuItem_Click);
+            // 
+            // ttlSeparator
+            // 
+            this.ttlSeparator.Name = "ttlSeparator";
+            this.ttlSeparator.Size = new System.Drawing.Size(182, 6);
+            // 
+            // view_ttl_toolStripMenuItem
+            // 
+            this.view_ttl_toolStripMenuItem.Name = "view_ttl_toolStripMenuItem";
+            this.view_ttl_toolStripMenuItem.Size = new System.Drawing.Size(185, 24);
+            this.view_ttl_toolStripMenuItem.Text = "View TTL";
+            this.view_ttl_toolStripMenuItem.Click += new System.EventHandler(this.view_ttl_toolStripMenuItem_Click);
+            // 
+            // set_ttl_toolStripMenuItem
+            // 
+            this.set_ttl_toolStripMenuItem.Name = "set_ttl_toolStripMenuItem";
+            this.set_ttl_toolStripMenuItem.Size = new System.Drawing.Size(185, 24);
+            this.set_ttl_toolStripMenuItem.Text = "Set TTL";
+            this.set_ttl_toolStripMenuItem.Click += new System.EventHandler(this.set_ttl_toolStripMenuItem_Click);
+            // 
+            // remove_ttl_toolStripMenuItem
+            // 
+            this.remove_ttl_toolStripMenuItem.Name = "remove_ttl_toolStripMenuItem";
+            this.remove_ttl_toolStripMenuItem.Size = new System.Drawing.Size(185, 24);
+            this.remove_ttl_toolStripMenuItem.Text = "Remove TTL";
+            this.remove_ttl_toolStripMenuItem.Click += new System.EventHandler(this.remove_ttl_toolStripMenuItem_Click);
 			// 
 			// treeView_server
 			// 
@@ -514,7 +607,11 @@ namespace RedisGuiManager
         private System.Windows.Forms.ToolStripMenuItem new_key_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem filter_key_ToolStripMenuItem;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip_redis;
-        private System.Windows.Forms.ToolStripMenuItem open_console_ToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem open_console_ToolStripMenuItem;
+		private System.Windows.Forms.ToolStripSeparator serverToolsSeparator;
+		private System.Windows.Forms.ToolStripMenuItem server_info_ToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem slowlog_ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem pubsub_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem reload_server_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem edit_connection_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem delete_connection_ToolStripMenuItem;
@@ -533,6 +630,9 @@ namespace RedisGuiManager
 		private System.Windows.Forms.ToolStripMenuItem find_db_from_list_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem toggle_show_default_dbs_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem remove_db_ToolStripMenuItem;
+		private System.Windows.Forms.ToolStripSeparator dataIoSeparator;
+		private System.Windows.Forms.ToolStripMenuItem export_data_ToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem import_data_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem add_db_range_to_list_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem remove_db_range_from_list_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem remove_keys_ToolStripMenuItem;
@@ -548,6 +648,10 @@ namespace RedisGuiManager
 		private System.Windows.Forms.ToolStripMenuItem copy_key_to_db_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem copy_key_to_machine_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem migrate_keys_ToolStripMenuItem;
+	private System.Windows.Forms.ToolStripSeparator ttlSeparator;
+	private System.Windows.Forms.ToolStripMenuItem view_ttl_toolStripMenuItem;
+	private System.Windows.Forms.ToolStripMenuItem set_ttl_toolStripMenuItem;
+	private System.Windows.Forms.ToolStripMenuItem remove_ttl_toolStripMenuItem;
 	}
 }
 

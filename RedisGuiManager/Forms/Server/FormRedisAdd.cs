@@ -56,8 +56,12 @@ namespace RedisGuiManager
             textBox_tunnel_pw.Text = settings.ssh_password;
             checkBox_use_ssh_key.Checked = settings.use_ssh_key;
             textBox_tunnel_key.Text = settings.ssh_key;
+            checkBox_use_ssl.Checked = settings.use_ssl;
+            checkBox_use_cluster.Checked = settings.use_cluster;
+            textBox_cluster_endpoints.Text = settings.cluster_endpoints ?? "";
 
             groupBox_tunnel.Enabled = checkBox_use_tunnel.Checked;
+            textBox_cluster_endpoints.Enabled = checkBox_use_cluster.Checked;
         }
 
         private void checkBox_show_password_CheckedChanged(object sender, EventArgs e)
@@ -134,6 +138,9 @@ namespace RedisGuiManager
             settings.ssh_password = textBox_tunnel_pw.Text;
             settings.use_ssh_key = checkBox_use_ssh_key.Checked;
             settings.ssh_key = textBox_tunnel_key.Text;
+            settings.use_ssl = checkBox_use_ssl.Checked;
+            settings.use_cluster = checkBox_use_cluster.Checked;
+            settings.cluster_endpoints = textBox_cluster_endpoints.Text;
 
             RedisClient redis = new RedisClient(settings);
             OperateResult connect = redis.Connect();
@@ -167,6 +174,9 @@ namespace RedisGuiManager
             settings.ssh_password = textBox_tunnel_pw.Text;
             settings.use_ssh_key = checkBox_use_ssh_key.Checked;
             settings.ssh_key = textBox_tunnel_key.Text;
+            settings.use_ssl = checkBox_use_ssl.Checked;
+            settings.use_cluster = checkBox_use_cluster.Checked;
+            settings.cluster_endpoints = textBox_cluster_endpoints.Text;
 
             DialogResult = DialogResult.OK;
         }
@@ -179,6 +189,17 @@ namespace RedisGuiManager
         private void checkBox_use_tunnel_CheckedChanged(object sender, EventArgs e)
         {
             groupBox_tunnel.Enabled = checkBox_use_tunnel.Checked;
+        }
+
+        private void checkBox_use_cluster_CheckedChanged(object sender, EventArgs e)
+        {
+            textBox_cluster_endpoints.Enabled = checkBox_use_cluster.Checked;
+            if (checkBox_use_cluster.Checked)
+            {
+                // Cluster mode only supports db 0; disable SSH tunnel as it conflicts
+                checkBox_use_tunnel.Checked = false;
+                groupBox_tunnel.Enabled = false;
+            }
         }
 
 		private void checkBox_show_ssh_password_CheckedChanged(object sender, EventArgs e)

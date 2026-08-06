@@ -124,6 +124,15 @@ namespace RedisGuiManager
         }
 
 
+        private static string FormatTTLShort(long seconds)
+        {
+            if (seconds < 0) return "∞";
+            if (seconds < 60) return $"{seconds}s";
+            if (seconds < 3600) return $"{seconds / 60}m{seconds % 60}s";
+            if (seconds < 86400) return $"{seconds / 3600}h{(seconds % 3600) / 60}m";
+            return $"{seconds / 86400}d{(seconds % 86400) / 3600}h";
+        }
+
         public void SetRedisClient(RedisClient client, string keyName)
         {
             this.redisClient = client;
@@ -132,8 +141,9 @@ namespace RedisGuiManager
 
             if (client != null)
             {
-                var ttl = client.Redis.Execute("TTL", keyName);
-                button_ttl.Text = "TTL:" + ttl.ToString();
+                var ttl_raw = client.Redis.Execute("TTL", keyName);
+                long ttl_seconds = (long)ttl_raw;
+                button_ttl.Text = "TTL:" + FormatTTLShort(ttl_seconds);
             }
         }
     }

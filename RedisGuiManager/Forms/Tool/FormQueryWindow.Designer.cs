@@ -327,7 +327,8 @@ namespace RedisGuiManager
             "List",
             "Set",
             "Zset",
-            "Hash"});
+            "Hash",
+            "Stream"});
             this.comboBox_keys_type.Location = new System.Drawing.Point(717, 43);
             this.comboBox_keys_type.Name = "comboBox_keys_type";
             this.comboBox_keys_type.Size = new System.Drawing.Size(109, 27);

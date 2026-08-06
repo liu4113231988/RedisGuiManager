@@ -143,6 +143,46 @@ namespace RedisGuiManager
             }
         }
 
+        private void button_stream_save_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(textBox_stream_key.Text))
+            {
+                MessageBox.Show("Key is empty");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(textBox_stream_field.Text))
+            {
+                MessageBox.Show("Field is empty");
+                return;
+            }
+
+            string id = string.IsNullOrEmpty(textBox_stream_id.Text) ? "*" : textBox_stream_id.Text;
+
+            try
+            {
+                var nameValues = new NameValueEntry[]
+                {
+                    new NameValueEntry(textBox_stream_field.Text, textBox_stream_value.Text)
+                };
+
+                var result = redis.StreamAdd(textBox_stream_key.Text, nameValues, id);
+
+                if (!result.IsNull)
+                {
+                    Close();
+                }
+                else
+                {
+                    MessageBox.Show("Add stream entry failed");
+                }
+            }
+            catch (RedisServerException ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
 		private void tabControl_type_SelectedIndexChanged(object sender, EventArgs e)
 		{
             tabControl_type.SelectedTab.SelectNextControl(tabControl_type.SelectedTab, true, true, true, true);

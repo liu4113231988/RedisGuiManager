@@ -45,6 +45,12 @@ namespace RedisGuiManager
         public bool hide_default_dbs { get; set; }
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public List<int> additional_dbs { get; set; }
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public bool use_ssl { get; set; } = false;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public bool use_cluster { get; set; } = false;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string cluster_endpoints { get; set; }
 
         [JsonIgnore]
         public RedisClient redis_client { get; set; }

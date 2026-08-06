@@ -24,6 +24,7 @@ namespace RedisGuiManager
             Set,
             Zset,
             Hash,
+            Stream,
         }
         private SQLiteConnection sqlite_con;
         private string table_name = "";
@@ -158,6 +159,11 @@ namespace RedisGuiManager
                 case RedisType.Hash:
                 {
                     my_type = RedisKeyType.Hash;
+                }
+                break;
+                case RedisType.Stream:
+                {
+                    my_type = RedisKeyType.Stream;
                 }
                 break;
             }
@@ -646,6 +652,98 @@ namespace RedisGuiManager
             treeView_field_names.Nodes.AddRange(field_name_nodes.ToArray());
         }
 
+        private async Task query_stream()
+        {
+            treeView_field_names.Nodes.Add("a_db");
+            treeView_field_names.Nodes.Add("a_key");
+            treeView_field_names.Nodes.Add("a_id");
+            treeView_field_names.Nodes.Add("a_field");
+            treeView_field_names.Nodes.Add("a_value");
+
+            string sql = $"CREATE TABLE {table_name} (a_db INTEGER, a_key TEXT, a_id TEXT, a_field TEXT, a_value TEXT)";
+            SQLiteCommand command = new SQLiteCommand(sql, sqlite_con);
+            int result = command.ExecuteNonQuery();
+
+            int db_num_start = db_num == -1 ? 0 : db_num;
+            int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+
+            for (int i = db_num_start; i <= db_num_end; ++i)
+            {
+                IDatabase redis = redis_client.GetDB(i);
+                toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
+                Application.DoEvents();
+
+                var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+
+                toolStripProgressBar_status.Value = 0;
+                toolStripProgressBar_status.Maximum = keys.Count();
+
+                HashSet<string> field_name_set = new HashSet<string>();
+                foreach (var key in keys)
+                {
+                    ++toolStripProgressBar_status.Value;
+                    toolStripStatusLabel_status.Text = $"Getting DB_{i} values...({toolStripProgressBar_status.Value} / {toolStripProgressBar_status.Maximum})";
+
+                    try
+                    {
+                        var entries = await redis.StreamRangeAsync(key);
+                        if (is_stop_query)
+                        {
+                            return;
+                        }
+
+                        foreach (var entry in entries)
+                        {
+                            foreach (var pair in entry.Values)
+                            {
+                                sql = $"INSERT INTO {table_name} (a_db, a_key, a_id, a_field, a_value) VALUES (@Db, @Key, @Id, @Field, @Value);";
+                                command = new SQLiteCommand(sql, sqlite_con);
+                                command.Parameters.AddWithValue("Db", i);
+                                command.Parameters.AddWithValue("Key", key.ToString());
+                                command.Parameters.AddWithValue("Id", entry.Id.ToString());
+                                command.Parameters.AddWithValue("Field", pair.Name.ToString());
+                                command.Parameters.AddWithValue("Value", pair.Value.ToString());
+
+                                command.ExecuteNonQuery();
+
+                                field_name_set.Add(pair.Name.ToString());
+                            }
+                        }
+                    }
+                    catch (RedisServerException redis_ex)
+                    {
+                        if (redis_ex.HResult != -2146233088)
+                        {
+                            // Log
+                        }
+
+                        if (is_stop_query)
+                        {
+                            return;
+                        }
+                    }
+
+                    List<string> field_name_list = field_name_set.ToList();
+                    field_name_list.Sort();
+                    List<TreeNode> field_name_nodes = new List<TreeNode>();
+                    var list_auto_complete_total = list_auto_complete_static.ToList();
+                    foreach (var field_name in field_name_list)
+                    {
+                        field_name_nodes.Add(new TreeNode(field_name));
+                        list_auto_complete_total.Add(new AutocompleteItem(field_name, 3));
+                    }
+
+                    autocompleteMenu.SetAutocompleteItems(list_auto_complete_total);
+                    var field_tree = treeView_field_names.Nodes.Cast<TreeNode>().FirstOrDefault(n => n.Text == "a_field");
+                    if (field_tree != null)
+                    {
+                        field_tree.Nodes.Clear();
+                        field_tree.Nodes.AddRange(field_name_nodes.ToArray());
+                    }
+                }
+            }
+        }
+
         private async Task execute_query(string select_sql)
         {
             button_query_execute.Text = "■";
@@ -703,6 +801,11 @@ namespace RedisGuiManager
                     case RedisKeyType.Hash:
                     {
                         await query_hash_ex();
+                    }
+                    break;
+                    case RedisKeyType.Stream:
+                    {
+                        await query_stream();
                     }
                     break;
                 }

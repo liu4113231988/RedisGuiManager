@@ -65,12 +65,23 @@ namespace RedisGuiManager
 			this.label_zset_value = new System.Windows.Forms.Label();
 			this.textBox_zset_key = new System.Windows.Forms.TextBox();
 			this.label_zset_key = new System.Windows.Forms.Label();
+			this.tabPage_stream = new System.Windows.Forms.TabPage();
+			this.button_stream_save = new System.Windows.Forms.Button();
+			this.textBox_stream_value = new System.Windows.Forms.TextBox();
+			this.label_stream_value = new System.Windows.Forms.Label();
+			this.textBox_stream_field = new System.Windows.Forms.TextBox();
+			this.label_stream_field = new System.Windows.Forms.Label();
+			this.textBox_stream_id = new System.Windows.Forms.TextBox();
+			this.label_stream_id = new System.Windows.Forms.Label();
+			this.textBox_stream_key = new System.Windows.Forms.TextBox();
+			this.label_stream_key = new System.Windows.Forms.Label();
 			this.tabControl_type.SuspendLayout();
 			this.tabPage_string.SuspendLayout();
 			this.tabPage_hash.SuspendLayout();
 			this.tabPage_list.SuspendLayout();
 			this.tabPage_set.SuspendLayout();
 			this.tabPage_zset.SuspendLayout();
+			this.tabPage_stream.SuspendLayout();
 			this.SuspendLayout();
 			// 
 			// tabControl_type
@@ -80,6 +91,7 @@ namespace RedisGuiManager
 			this.tabControl_type.Controls.Add(this.tabPage_list);
 			this.tabControl_type.Controls.Add(this.tabPage_set);
 			this.tabControl_type.Controls.Add(this.tabPage_zset);
+			this.tabControl_type.Controls.Add(this.tabPage_stream);
 			this.tabControl_type.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.tabControl_type.Font = new System.Drawing.Font("Consolas", 12F);
 			this.tabControl_type.Location = new System.Drawing.Point(0, 0);
@@ -529,7 +541,120 @@ namespace RedisGuiManager
 			this.label_zset_key.Size = new System.Drawing.Size(36, 19);
 			this.label_zset_key.TabIndex = 15;
 			this.label_zset_key.Text = "Key";
-			// 
+			//
+			// tabPage_stream
+			//
+			this.tabPage_stream.Controls.Add(this.button_stream_save);
+			this.tabPage_stream.Controls.Add(this.textBox_stream_value);
+			this.tabPage_stream.Controls.Add(this.label_stream_value);
+			this.tabPage_stream.Controls.Add(this.textBox_stream_field);
+			this.tabPage_stream.Controls.Add(this.label_stream_field);
+			this.tabPage_stream.Controls.Add(this.textBox_stream_id);
+			this.tabPage_stream.Controls.Add(this.label_stream_id);
+			this.tabPage_stream.Controls.Add(this.textBox_stream_key);
+			this.tabPage_stream.Controls.Add(this.label_stream_key);
+			this.tabPage_stream.Font = new System.Drawing.Font("Consolas", 12F);
+			this.tabPage_stream.Location = new System.Drawing.Point(4, 28);
+			this.tabPage_stream.Name = "tabPage_stream";
+			this.tabPage_stream.Padding = new System.Windows.Forms.Padding(3);
+			this.tabPage_stream.Size = new System.Drawing.Size(493, 199);
+			this.tabPage_stream.TabIndex = 5;
+			this.tabPage_stream.Text = "Stream";
+			this.tabPage_stream.UseVisualStyleBackColor = true;
+			//
+			// textBox_stream_key
+			//
+			this.textBox_stream_key.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+			| System.Windows.Forms.AnchorStyles.Right)));
+			this.textBox_stream_key.Font = new System.Drawing.Font("Consolas", 12F);
+			this.textBox_stream_key.Location = new System.Drawing.Point(109, 22);
+			this.textBox_stream_key.Name = "textBox_stream_key";
+			this.textBox_stream_key.Size = new System.Drawing.Size(376, 26);
+			this.textBox_stream_key.TabIndex = 0;
+			//
+			// label_stream_key
+			//
+			this.label_stream_key.AutoSize = true;
+			this.label_stream_key.Location = new System.Drawing.Point(44, 25);
+			this.label_stream_key.Name = "label_stream_key";
+			this.label_stream_key.Size = new System.Drawing.Size(36, 19);
+			this.label_stream_key.TabIndex = 0;
+			this.label_stream_key.Text = "Key";
+			//
+			// textBox_stream_id
+			//
+			this.textBox_stream_id.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+			| System.Windows.Forms.AnchorStyles.Right)));
+			this.textBox_stream_id.Font = new System.Drawing.Font("Consolas", 12F);
+			this.textBox_stream_id.Location = new System.Drawing.Point(109, 54);
+			this.textBox_stream_id.Name = "textBox_stream_id";
+			this.textBox_stream_id.Size = new System.Drawing.Size(376, 26);
+			this.textBox_stream_id.TabIndex = 1;
+			this.textBox_stream_id.Text = "*";
+			//
+			// label_stream_id
+			//
+			this.label_stream_id.AutoSize = true;
+			this.label_stream_id.Location = new System.Drawing.Point(44, 57);
+			this.label_stream_id.Name = "label_stream_id";
+			this.label_stream_id.Size = new System.Drawing.Size(30, 19);
+			this.label_stream_id.TabIndex = 1;
+			this.label_stream_id.Text = "ID";
+			//
+			// textBox_stream_field
+			//
+			this.textBox_stream_field.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+			| System.Windows.Forms.AnchorStyles.Right)));
+			this.textBox_stream_field.Font = new System.Drawing.Font("Consolas", 12F);
+			this.textBox_stream_field.Location = new System.Drawing.Point(109, 86);
+			this.textBox_stream_field.Name = "textBox_stream_field";
+			this.textBox_stream_field.Size = new System.Drawing.Size(376, 26);
+			this.textBox_stream_field.TabIndex = 2;
+			//
+			// label_stream_field
+			//
+			this.label_stream_field.AutoSize = true;
+			this.label_stream_field.Location = new System.Drawing.Point(44, 89);
+			this.label_stream_field.Name = "label_stream_field";
+			this.label_stream_field.Size = new System.Drawing.Size(48, 19);
+			this.label_stream_field.TabIndex = 2;
+			this.label_stream_field.Text = "Field";
+			//
+			// textBox_stream_value
+			//
+			this.textBox_stream_value.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+			| System.Windows.Forms.AnchorStyles.Left)
+			| System.Windows.Forms.AnchorStyles.Right)));
+			this.textBox_stream_value.Font = new System.Drawing.Font("Consolas", 12F);
+			this.textBox_stream_value.Location = new System.Drawing.Point(109, 118);
+			this.textBox_stream_value.Multiline = true;
+			this.textBox_stream_value.Name = "textBox_stream_value";
+			this.textBox_stream_value.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+			this.textBox_stream_value.Size = new System.Drawing.Size(376, 31);
+			this.textBox_stream_value.TabIndex = 3;
+			//
+			// label_stream_value
+			//
+			this.label_stream_value.AutoSize = true;
+			this.label_stream_value.Location = new System.Drawing.Point(44, 121);
+			this.label_stream_value.Name = "label_stream_value";
+			this.label_stream_value.Size = new System.Drawing.Size(54, 19);
+			this.label_stream_value.TabIndex = 3;
+			this.label_stream_value.Text = "Value";
+			//
+			// button_stream_save
+			//
+			this.button_stream_save.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
+			| System.Windows.Forms.AnchorStyles.Right)));
+			this.button_stream_save.Font = new System.Drawing.Font("Consolas", 12F);
+			this.button_stream_save.Location = new System.Drawing.Point(182, 155);
+			this.button_stream_save.Name = "button_stream_save";
+			this.button_stream_save.Size = new System.Drawing.Size(140, 31);
+			this.button_stream_save.TabIndex = 4;
+			this.button_stream_save.Text = "Save";
+			this.button_stream_save.UseVisualStyleBackColor = true;
+			this.button_stream_save.Click += new System.EventHandler(this.button_stream_save_Click);
+			//
 			// FormRedisInput
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -556,6 +681,8 @@ namespace RedisGuiManager
 			this.tabPage_set.PerformLayout();
 			this.tabPage_zset.ResumeLayout(false);
 			this.tabPage_zset.PerformLayout();
+			this.tabPage_stream.ResumeLayout(false);
+			this.tabPage_stream.PerformLayout();
 			this.ResumeLayout(false);
 
         }
@@ -599,5 +726,15 @@ namespace RedisGuiManager
 		private System.Windows.Forms.Label label_zset_value;
 		private System.Windows.Forms.TextBox textBox_zset_key;
 		private System.Windows.Forms.Label label_zset_key;
+		private System.Windows.Forms.TabPage tabPage_stream;
+		private System.Windows.Forms.TextBox textBox_stream_key;
+		private System.Windows.Forms.Label label_stream_key;
+		private System.Windows.Forms.TextBox textBox_stream_id;
+		private System.Windows.Forms.Label label_stream_id;
+		private System.Windows.Forms.TextBox textBox_stream_field;
+		private System.Windows.Forms.Label label_stream_field;
+		private System.Windows.Forms.TextBox textBox_stream_value;
+		private System.Windows.Forms.Label label_stream_value;
+		private System.Windows.Forms.Button button_stream_save;
 	}
 }
