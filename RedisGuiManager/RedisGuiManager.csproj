@@ -11,9 +11,9 @@
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
     <GenerateResourceWarnOnBinaryFormatterUse>false</GenerateResourceWarnOnBinaryFormatterUse>
     <AssemblyTitle>RedisGuiManager</AssemblyTitle>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <Copyright>Copyright Richard.Hu © 2020</Copyright>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <Copyright>Copyright Liu © 2026</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

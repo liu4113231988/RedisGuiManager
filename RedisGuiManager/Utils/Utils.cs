@@ -6,10 +6,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Newtonsoft.Json;
 
 namespace RedisGuiManager
 {
@@ -94,23 +94,32 @@ namespace RedisGuiManager
 			if (obj == null)
 				return null;
 
-			BinaryFormatter bf = new BinaryFormatter();
-			MemoryStream ms = new MemoryStream();
-			bf.Serialize(ms, obj);
-
-			return ms.ToArray();
+			try
+			{
+				string json = JsonConvert.SerializeObject(obj);
+				return Encoding.UTF8.GetBytes(json);
+			}
+			catch (Exception ex)
+			{
+				throw new InvalidOperationException("Serialization to byte[] failed:", ex);
+			}
 		}
 
 		// Convert a byte array to an Object
 		public static object ByteArrayToObject(byte[] arrBytes)
 		{
-			MemoryStream memStream = new MemoryStream();
-			BinaryFormatter binForm = new BinaryFormatter();
-			memStream.Write(arrBytes, 0, arrBytes.Length);
-			memStream.Seek(0, SeekOrigin.Begin);
-			object obj = (object)binForm.Deserialize(memStream);
+			if (arrBytes == null || arrBytes.Length == 0)
+				return null;
 
-			return obj;
+			try
+				{
+					string json = Encoding.UTF8.GetString(arrBytes);
+					return JsonConvert.DeserializeObject(json);
+				}
+			catch (Exception ex)
+			{
+				throw new InvalidOperationException("Deserialization from byte[] failed:", ex);
+			}
 		}
 
 		public static bool RedisGlobMatch(string pattern, string str)

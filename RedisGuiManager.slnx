@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AutocompleteMenu/AutocompleteMenu.csproj" />
+  <Project Path="RedisGuiManager/RedisGuiManager.csproj" />
+</Solution>
