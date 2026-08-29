@@ -20,8 +20,12 @@ namespace RedisGuiManager
         private List<RedisGroup> redis_group = new List<RedisGroup>();
         private List<RedisSettings> redis_settings = new List<RedisSettings>();
         private UserControl userControl = null;
-        private string ServerListPath = "";
         private bool is_shown = false;
+        private const string ConnectionsDir = "connections";
+        private const string DefaultConnectionsFile = "connections/connections.json";
+        private Dictionary<RedisSettings, string> _settingFileMap = new Dictionary<RedisSettings, string>();
+        private Dictionary<RedisGroup, string> _groupFileMap = new Dictionary<RedisGroup, string>();
+        private HashSet<string> _knownFiles = new HashSet<string>();
 
         public FormMain()
         {
@@ -29,69 +33,234 @@ namespace RedisGuiManager
 
             contextMenuStrip_redis.Items.Remove(remove_keys_from_registered_dbs_ToolStripMenuItem);
 
-			Config.Load();
+            Config.Load();
 
             if (Config.darkmode > 0)
             {
                 Utils.DarkThemeForm(this);
             }
+            // 同步暗黑模式复选框到左侧面板（替代原 FormLoadServerList 中的设置）
+            try
+            {
+                checkBox_darkmode.Checked = Config.darkmode > 0;
+            }
+            catch { }
+        }
+
+        private void checkBox_darkmode_CheckedChanged(object sender, EventArgs e)
+        {
+            Config.darkmode = checkBox_darkmode.Checked ? 1 : 0;
+            Config.Save();
         }
 
         private void FormMain_Load(object sender, EventArgs e)
         {
             CreateRedisShowTagControl<StartControl>();
 
-            FormLoadServerList flsl = new FormLoadServerList();
-            if (flsl.ShowDialog() != DialogResult.OK)
-            {
-                this.Close();
-                return;
-            }
-
-            LoadRedisServerList(flsl.SelectedPath);
+            LoadAllConnections();
         }
 
         private void ClearAll()
         {
+            // 关闭已建立的连接：包含分组内的连接与独立连接，避免 TreeView 仅含顶层节点导致泄漏
+            foreach (var g in redis_group)
+            {
+                if (g.connections == null) continue;
+                foreach (var s in g.connections)
+                {
+                    try { s.redis_client?.Close(); } catch { }
+                }
+            }
+            foreach (var s in redis_settings)
+            {
+                try { s.redis_client?.Close(); } catch { }
+            }
+            // 兜底：树上仍可能存在未在列表中的节点（极端情况）
             foreach (TreeNode item in treeView_server.Nodes)
             {
-                if (item != null)
+                if (item?.Tag is RedisClient client)
                 {
-                    if (item.Tag is RedisClient client)
-                    {
-                        if (client.Redis != null)
-                        {
-                            client.Close();
-                        }
-                    }
+                    try { if (client.Redis != null) client.Close(); } catch { }
+                    continue;
+                }
+                if (item?.Tag is RedisGroup grp && grp.connections != null)
+                {
+                    foreach (var s in grp.connections)
+                        try { s.redis_client?.Close(); } catch { }
+                }
+                // 递归关闭子节点中的客户端（分组子节点）
+                foreach (TreeNode child in item.Nodes)
+                {
+                    if (child?.Tag is RedisClient c2)
+                        try { if (c2.Redis != null) c2.Close(); } catch { }
                 }
             }
 
             redis_group.Clear();
             redis_settings.Clear();
+            _settingFileMap.Clear();
+            _groupFileMap.Clear();
             treeView_server.Nodes.Clear();
+        }
+
+        private string GetConnectionsDir()
+        {
+            return Path.Combine(Application.StartupPath, ConnectionsDir);
+        }
+
+        private string GetDefaultConnectionsFile()
+        {
+            return Path.Combine(GetConnectionsDir(), "connections.json");
+        }
+
+        private void LoadAllConnections()
+        {
+            ClearAll();
+
+            this.Text = "Redis Gui Manager";
+            _knownFiles.Clear();
+            var loadErrors = new List<string>();
+
+            try
+            {
+                string connDir = GetConnectionsDir();
+                string defaultFile = GetDefaultConnectionsFile();
+                if (!Directory.Exists(connDir))
+                {
+                    Directory.CreateDirectory(connDir);
+                }
+
+                string[] files = Directory.GetFiles(connDir, "*.json");
+                if (files.Length == 0)
+                {
+                    // create default empty file if none exists
+                    if (!File.Exists(defaultFile))
+                    {
+                        File.WriteAllText(defaultFile, "[\n]\n", Encoding.UTF8);
+                    }
+                    files = new string[] { defaultFile };
+                }
+
+
+                foreach (string path in files)
+                {
+                    string fullPath = Path.GetFullPath(path);
+                    _knownFiles.Add(fullPath);
+                    string json_file;
+                    try
+                    {
+                        json_file = File.ReadAllText(path, Encoding.UTF8);
+                        if (string.IsNullOrWhiteSpace(json_file))
+                        {
+                            // 空文件视为合法空数组
+                            continue;
+                        }
+                        JArray json_parsed;
+                        try
+                        {
+                            json_parsed = JArray.Parse(json_file);
+                        }
+                        catch (JsonReaderException jex)
+                        {
+                            // 单对象或损坏的 JSON：尝试包一层或记录错误后跳过
+                            throw new Exception($"JSON 格式错误: {jex.Message}", jex);
+                        }
+                        foreach (var j in json_parsed)
+                        {
+                            if (j == null || j.Type == JTokenType.Null) continue;
+                            if (j.SelectToken("$.type") != null)
+                            {
+                                RedisGroup group = j.ToObject<RedisGroup>();
+                                if (group == null) continue;
+                                if (group.connections == null) group.connections = new List<RedisSettings>();
+                                redis_group.Add(group);
+                                _groupFileMap[group] = fullPath;
+                            }
+                            else
+                            {
+                                RedisSettings setting = j.ToObject<RedisSettings>();
+                                if (setting == null) continue;
+                                // 基础字段校验：name/host 为空的视为脏数据跳过
+                                if (string.IsNullOrWhiteSpace(setting.name) && string.IsNullOrWhiteSpace(setting.host))
+                                {
+                                    loadErrors.Add($"{Path.GetFileName(path)}: 跳过无名无 host 的条目");
+                                    continue;
+                                }
+                                redis_settings.Add(setting);
+                                _settingFileMap[setting] = fullPath;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        string msg = $"Load failed: {Path.GetFileName(path)} - {ex.Message}";
+                        loadErrors.Add(msg);
+                    }
+                }
+                if (loadErrors.Count > 0)
+                {
+                    // 暂存，后面汇总显示，避免被后续覆盖
+                }
+
+                foreach (var group in redis_group)
+                {
+                    if (group.connections == null) group.connections = new List<RedisSettings>();
+                    foreach (var settings in group.connections)
+                    {
+                        settings.redis_client = new RedisClient(settings);
+                        if (!_settingFileMap.ContainsKey(settings))
+                        {
+                            // nested settings inherit group's file
+                            _settingFileMap[settings] = _groupFileMap[group];
+                        }
+                    }
+                }
+
+                foreach (var settings in redis_settings)
+                {
+                    settings.redis_client = new RedisClient(settings);
+                }
+
+                // ensure default file is known for new adds
+                _knownFiles.Add(Path.GetFullPath(GetDefaultConnectionsFile()));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Load connections failed\r\n" + ex.Message);
+            }
+
+            LoadRedisSettings();
+            string summary = $"Loaded {redis_settings.Count + redis_group.Sum(g => g.connections.Count)} connections from {_knownFiles.Count} file(s)";
+            if (loadErrors.Count > 0)
+                toolStripStatusLabel1.Text = summary + " | " + string.Join(" | ", loadErrors.Take(2));
+            else
+                toolStripStatusLabel1.Text = summary;
         }
 
         private void LoadRedisServerList(string path)
         {
             ClearAll();
 
-            ServerListPath = path;
-            this.Text = string.Format("Redis Gui Manager ({0})", Path.GetFileNameWithoutExtension(ServerListPath));
+            this.Text = string.Format("Redis Gui Manager ({0})", Path.GetFileNameWithoutExtension(path));
+            string fullPath = Path.GetFullPath(path);
+            _knownFiles.Add(fullPath);
 
-            string json_file = File.ReadAllText(ServerListPath, Encoding.UTF8);
+            string json_file = File.ReadAllText(path, Encoding.UTF8);
             var json_parsed = JArray.Parse(json_file);
             foreach (var j in json_parsed)
             {
                 if (j.SelectToken("$.type") != null)
                 {
                     RedisGroup group = j.ToObject<RedisGroup>();
+                    if (group.connections == null) group.connections = new List<RedisSettings>();
                     redis_group.Add(group);
+                    _groupFileMap[group] = fullPath;
                 }
                 else
                 {
                     RedisSettings setting = j.ToObject<RedisSettings>();
                     redis_settings.Add(setting);
+                    _settingFileMap[setting] = fullPath;
                 }
             }
 
@@ -100,6 +269,8 @@ namespace RedisGuiManager
                 foreach (var settings in group.connections)
                 {
                     settings.redis_client = new RedisClient(settings);
+                    if (!_settingFileMap.ContainsKey(settings))
+                        _settingFileMap[settings] = _groupFileMap[group];
                 }
             }
 
@@ -277,22 +448,28 @@ namespace RedisGuiManager
 		{
 			if (select.Tag is RedisClient client)
 			{
+				if (client.Settings.additional_dbs == null)
+					client.Settings.additional_dbs = new List<int>();
+				bool changed = false;
 				foreach (int db_num in db_nums)
 				{
 					if (AddTreeNode_DB(client, db_num, select, false))
 					{
-						if (client.Settings.additional_dbs == null)
-						{
-							client.Settings.additional_dbs = new List<int>();
-						}
-
 						client.Settings.additional_dbs.Add(db_num);
+						changed = true;
 					}
 				}
 
-				client.Settings.additional_dbs.Sort();
-
-				SaveRedisSettings();
+				if (changed)
+				{
+					client.Settings.additional_dbs.Sort();
+					SaveRedisSettings();
+				}
+				else if (client.Settings.additional_dbs.Count == 0)
+				{
+					// 避免空列表序列化为 null，保持一致性
+					client.Settings.additional_dbs = null;
+				}
 			}
 		}
 
@@ -341,6 +518,8 @@ namespace RedisGuiManager
 
 					if (select.Tag is RedisClient client)
 					{
+						if (client.Settings.additional_dbs == null)
+							client.Settings.additional_dbs = new List<int>();
 						for (int i = dbNumStart; i <= dbNumEnd; ++i)
 						{
 							client.Settings.additional_dbs.Remove(i);
@@ -448,9 +627,12 @@ namespace RedisGuiManager
                             db_nums.Add(i);
 						}
 
-                        foreach (int i in client.Settings.additional_dbs)
-						{
-                            db_nums.Add(i);
+                        if (client.Settings.additional_dbs != null)
+                        {
+                            foreach (int i in client.Settings.additional_dbs)
+                            {
+                                db_nums.Add(i);
+                            }
                         }
 
                         int deleted_count = 0;
@@ -1041,7 +1223,10 @@ namespace RedisGuiManager
 
 			if (select.Tag is DbSettings dbSettings)
 			{
-                RedisClient redisClient = select.Parent.Tag as RedisClient;
+                RedisClient redisClient = select.Parent?.Tag as RedisClient;
+                if (redisClient == null) return;
+                if (redisClient.Settings.additional_dbs == null)
+                    redisClient.Settings.additional_dbs = new List<int>();
                 redisClient.Settings.additional_dbs.Remove(dbSettings.DBNumber);
 
 				SaveRedisSettings();
@@ -1151,6 +1336,9 @@ namespace RedisGuiManager
         private void treeView_server_AfterSelect(object sender, TreeViewEventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+            // Tag 可能为 null（新创建的临时节点），直接返回
+            if (select.Tag == null) return;
 
             if (select.Tag is RedisGroup)
             {
@@ -1258,21 +1446,23 @@ namespace RedisGuiManager
 
         private TreeNode GetRedisNode(TreeNode treeNode)
         {
+            if (treeNode == null) return null;
             if (treeNode.Tag is RedisClient)
             {
                 return treeNode;
             }
-
+            if (treeNode.Parent == null) return null;
             return GetRedisNode(treeNode.Parent);
         }
 
         private TreeNode GetDbNode(TreeNode treeNode)
         {
+            if (treeNode == null) return null;
             if (treeNode.Tag is DbSettings)
             {
                 return treeNode;
             }
-
+            if (treeNode.Parent == null) return null;
             return GetDbNode(treeNode.Parent);
         }
 
@@ -1299,16 +1489,18 @@ namespace RedisGuiManager
 
         private string GetFullpathFolder(TreeNode treeNode, string path)
         {
+            if (treeNode == null) return path.Length > 0 ? path.Substring(1) : path;
             if (treeNode.Tag is DbSettings)
             {
-                return path.Substring(1);
+                return path.Length > 0 ? path.Substring(1) : path;
             }
-			else if (treeNode.Tag is RedisFolder redis_folder)
-			{
-				path = ":" + redis_folder.path_name + path;
-			}
+            else if (treeNode.Tag is RedisFolder redis_folder)
+            {
+                path = ":" + redis_folder.path_name + path;
+            }
+            if (treeNode.Parent == null) return path.Length > 0 ? path.Substring(1) : path;
 
-			return GetFullpathFolder(treeNode.Parent, path);
+            return GetFullpathFolder(treeNode.Parent, path);
         }
 
         private void FilterKeys(TreeNode select)
@@ -1853,40 +2045,111 @@ namespace RedisGuiManager
 
         private void SaveRedisSettings()
         {
-            JArray json_root = new JArray();
-
-            foreach (var group in redis_group)
+            try
             {
-                json_root.Add(JObject.FromObject(group));
-            }
+                string connDir = GetConnectionsDir();
+                string defaultFull = Path.GetFullPath(GetDefaultConnectionsFile());
+                if (!Directory.Exists(connDir))
+                    Directory.CreateDirectory(connDir);
 
-            foreach (var setting in redis_settings)
+                // group entries by target file
+                var fileMap = new Dictionary<string, JArray>(StringComparer.OrdinalIgnoreCase);
+
+                // ensure known files are considered
+                foreach (var f in _knownFiles)
+                {
+                    if (!fileMap.ContainsKey(f))
+                        fileMap[f] = new JArray();
+                }
+
+                if (!fileMap.ContainsKey(defaultFull))
+                    fileMap[defaultFull] = new JArray();
+
+                foreach (var group in redis_group)
+                {
+                    string target = null;
+                    if (!_groupFileMap.TryGetValue(group, out target) || string.IsNullOrEmpty(target))
+                        target = defaultFull;
+                    target = Path.GetFullPath(target);
+                    if (!fileMap.ContainsKey(target))
+                        fileMap[target] = new JArray();
+                    fileMap[target].Add(JObject.FromObject(group));
+                    _groupFileMap[group] = target;
+                    // keep nested settings mapped to same file
+                    if (group.connections != null)
+                    {
+                        foreach (var s in group.connections)
+                            _settingFileMap[s] = target;
+                    }
+                    if (!_knownFiles.Contains(target))
+                        _knownFiles.Add(target);
+                }
+
+                foreach (var setting in redis_settings)
+                {
+                    string target = null;
+                    if (!_settingFileMap.TryGetValue(setting, out target) || string.IsNullOrEmpty(target))
+                        target = defaultFull;
+                    target = Path.GetFullPath(target);
+                    if (!fileMap.ContainsKey(target))
+                        fileMap[target] = new JArray();
+                    fileMap[target].Add(JObject.FromObject(setting));
+                    _settingFileMap[setting] = target;
+                    if (!_knownFiles.Contains(target))
+                        _knownFiles.Add(target);
+                }
+
+                // 原子写入：先写临时文件再 Move，避免崩溃导致文件损坏
+                foreach (var kv in fileMap)
+                {
+                    try
+                    {
+                        string dir = Path.GetDirectoryName(kv.Key);
+                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                            Directory.CreateDirectory(dir);
+                        string tmp = kv.Key + ".tmp";
+                        File.WriteAllText(tmp, kv.Value.ToString(Formatting.Indented), Encoding.UTF8);
+                        File.Copy(tmp, kv.Key, true);
+                        File.Delete(tmp);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Save failed for {kv.Key}\r\n{ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
             {
-                json_root.Add(JObject.FromObject(setting));
+                MessageBox.Show("Save failed\r\n" + ex.Message);
             }
-
-            File.WriteAllText(ServerListPath, json_root.ToString(), Encoding.UTF8);
         }
 
         private void RemoveServer(RedisClient client)
         {
+            // 安全地移除分组内连接：避免 foreach 中修改集合
             foreach (var group in redis_group)
             {
-                foreach (var settings in group.connections)
+                if (group.connections == null) continue;
+                for (int i = group.connections.Count - 1; i >= 0; i--)
                 {
+                    var settings = group.connections[i];
                     if (settings.redis_client == client)
                     {
-                        group.connections.Remove(settings);
+                        _settingFileMap.Remove(settings);
+                        group.connections.RemoveAt(i);
                         break;
                     }
                 }
             }
 
-            foreach (var settings in redis_settings)
+            // 移除独立连接
+            for (int i = redis_settings.Count - 1; i >= 0; i--)
             {
+                var settings = redis_settings[i];
                 if (settings.redis_client == client)
                 {
-                    redis_settings.Remove(settings);
+                    _settingFileMap.Remove(settings);
+                    redis_settings.RemoveAt(i);
                     break;
                 }
             }
@@ -1901,8 +2164,21 @@ namespace RedisGuiManager
                     return;
                 }
 
+                // 名称重复校验：避免树节点歧义（与现有独立连接及分组内连接比较）
+                string newName = form.Settings.name?.Trim();
+                bool dup = redis_settings.Any(s => string.Equals(s.name?.Trim(), newName, StringComparison.OrdinalIgnoreCase))
+                    || redis_group.Any(g => g.connections != null && g.connections.Any(s => string.Equals(s.name?.Trim(), newName, StringComparison.OrdinalIgnoreCase)));
+                if (dup)
+                {
+                    MessageBox.Show($"连接名称 \"{newName}\" 已存在，请使用不同名称。", "名称重复", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
                 redis_settings.Add(form.Settings);
                 form.Settings.redis_client = new RedisClient(form.Settings);
+                string defaultFull = Path.GetFullPath(GetDefaultConnectionsFile());
+                _settingFileMap[form.Settings] = defaultFull;
+                _knownFiles.Add(defaultFull);
                 SaveRedisSettings();
 
                 TreeNode node = new TreeNode(form.Settings.name);
@@ -1915,20 +2191,8 @@ namespace RedisGuiManager
 
         private void button_open_server_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Filter = "Redis server list (*.json)|*.json";
-            ofd.Multiselect = false;
-            ofd.InitialDirectory = Application.StartupPath + "\\connections";
-            if (ofd.ShowDialog() != DialogResult.OK)
-            {
-                return;
-            }
-
-            FormLoadServerList formLoadServerList = new FormLoadServerList();
-            formLoadServerList.LoadRecent();
-            formLoadServerList.SaveRecent(ofd.FileName);
-
-            LoadRedisServerList(ofd.FileName);
+            // 刷新所有连接：重新扫描 connections 目录并以树根节点加载
+            LoadAllConnections();
         }
 
         private void FormMain_Move(object sender, EventArgs e)

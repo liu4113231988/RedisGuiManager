@@ -35,6 +35,7 @@ namespace RedisGuiManager
 			this.splitContainer1 = new System.Windows.Forms.SplitContainer();
 			this.button_open_server = new System.Windows.Forms.Button();
 			this.button_add_server = new System.Windows.Forms.Button();
+			this.checkBox_darkmode = new System.Windows.Forms.CheckBox();
 			this.imageList_main = new System.Windows.Forms.ImageList(this.components);
 			this.panel1 = new System.Windows.Forms.Panel();
 			this.contextMenuStrip_db = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -119,6 +120,7 @@ namespace RedisGuiManager
 			// 
 			// splitContainer1.Panel1
 			// 
+			this.splitContainer1.Panel1.Controls.Add(this.checkBox_darkmode);
 			this.splitContainer1.Panel1.Controls.Add(this.button_open_server);
 			this.splitContainer1.Panel1.Controls.Add(this.button_add_server);
 			this.splitContainer1.Panel1.Controls.Add(this.treeView_server);
@@ -132,7 +134,7 @@ namespace RedisGuiManager
 			// 
 			// button_open_server
 			// 
-			this.button_open_server.Image = global::RedisGuiManager.Properties.Resources.folder_open;
+			this.button_open_server.Image = global::RedisGuiManager.Properties.Resources.Activity_16xLG;
 			this.button_open_server.Location = new System.Drawing.Point(3, 3);
 			this.button_open_server.Name = "button_open_server";
 			this.button_open_server.Size = new System.Drawing.Size(32, 23);
@@ -150,6 +152,18 @@ namespace RedisGuiManager
 			this.button_add_server.TabIndex = 2;
 			this.button_add_server.UseVisualStyleBackColor = true;
 			this.button_add_server.Click += new System.EventHandler(this.button_add_server_Click);
+			// 
+			// checkBox_darkmode
+			// 
+			this.checkBox_darkmode.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+			this.checkBox_darkmode.AutoSize = true;
+			this.checkBox_darkmode.Location = new System.Drawing.Point(5, 624);
+			this.checkBox_darkmode.Name = "checkBox_darkmode";
+			this.checkBox_darkmode.Size = new System.Drawing.Size(215, 19);
+			this.checkBox_darkmode.TabIndex = 4;
+			this.checkBox_darkmode.Text = "Dark mode (Need relaunch)";
+			this.checkBox_darkmode.UseVisualStyleBackColor = true;
+			this.checkBox_darkmode.CheckedChanged += new System.EventHandler(this.checkBox_darkmode_CheckedChanged);
 			// 
 			// imageList_main
 			// 
@@ -562,7 +576,7 @@ namespace RedisGuiManager
 			this.treeView_server.Name = "treeView_server";
 			this.treeView_server.SelectedImageIndex = 0;
 			this.treeView_server.ShowPlusMinus = false;
-			this.treeView_server.Size = new System.Drawing.Size(324, 616);
+			this.treeView_server.Size = new System.Drawing.Size(324, 590);
 			this.treeView_server.TabIndex = 1;
 			// 
 			// FormMain
@@ -618,6 +632,7 @@ namespace RedisGuiManager
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip_class;
         private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Button button_add_server;
+        private System.Windows.Forms.CheckBox checkBox_darkmode;
         private System.Windows.Forms.ToolStripMenuItem disconnect_connection_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem queryWindowToolStripMenuItem;
         private System.Windows.Forms.Button button_open_server;
