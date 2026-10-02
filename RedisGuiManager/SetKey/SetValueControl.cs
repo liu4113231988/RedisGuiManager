@@ -211,27 +211,37 @@ namespace RedisGuiManager
 
 		private void button_save_Click(object sender, EventArgs e)
 		{
-			if (dataGridView_set.SelectedRows.Count <= 0)
-			{
-				return;
-			}
+            try
+            {
+                if (dataGridView_set.SelectedRows.Count <= 0)
+                {
+                    return;
+                }
 
-			string save_text = valueControl.EditedValue();
-			if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
-			{
-				try
-				{
-					save_text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(save_text), Formatting.None);
-				}
-				catch (JsonReaderException)
-				{
-				}
-			}
+                string save_text = valueControl.EditedValue();
+                if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
+                {
+                    try
+                    {
+                        save_text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(save_text), Formatting.None);
+                    }
+                    catch (JsonReaderException)
+                    {
+                    }
+                }
 
-            redisClient.Redis.SetRemove(stringKeyName, selectRow.Cells[1].Value.ToString());
-            redisClient.Redis.SetAdd(stringKeyName, save_text);
+                redisClient.Redis.ScriptEvaluate(
+                    "if redis.call('SISMEMBER',KEYS[1],ARGV[1]) == 0 then return redis.error_reply('Member changed; refresh first') end; redis.call('SADD',KEYS[1],ARGV[2]); if ARGV[1] ~= ARGV[2] then redis.call('SREM',KEYS[1],ARGV[1]) end; return 1",
+                    new StackExchange.Redis.RedisKey[] { stringKeyName },
+                    new StackExchange.Redis.RedisValue[] { selectRow.Cells[1].Value.ToString(), save_text });
 
-            RefreshKey();
+                RefreshKey();
+
+            }
+            catch (StackExchange.Redis.RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+            }
         }
 
 		private void search_field_loop()

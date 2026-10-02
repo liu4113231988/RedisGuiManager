@@ -120,7 +120,7 @@ namespace RedisGuiManager
                 , redis_client.Settings.name
                 , redis_client.Settings.host
                 , redis_client.Settings.port
-                , db_num == -1 ? $"All [0 ~ {redis_client.RedisServer.DatabaseCount - 1}]" : db_num.ToString()
+                , db_num == -1 ? $"All [0 ~ {(redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1)}]" : db_num.ToString()
                 );
 
             this.redis_client = redis_client;
@@ -187,7 +187,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
             int db_num_start = db_num == -1 ? 0 : db_num;
-            int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+            int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -195,7 +195,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -250,7 +250,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -258,7 +258,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -319,7 +319,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -327,7 +327,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -388,7 +388,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -396,7 +396,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -457,7 +457,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -465,7 +465,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -536,7 +536,7 @@ namespace RedisGuiManager
             Dictionary<string, List<KeyValuePair<string, string>>> dic_data = new Dictionary<string, List<KeyValuePair<string, string>>>();
 
             int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
             string db_n_key = "";
 
             for (int i = db_num_start; i <= db_num_end; ++i)
@@ -545,7 +545,7 @@ namespace RedisGuiManager
                 toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
                 Application.DoEvents();
 
-                var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+                var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
                 toolStripProgressBar_status.Value = 0;
                 toolStripProgressBar_status.Maximum = keys.Count();
@@ -665,7 +665,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
             int db_num_start = db_num == -1 ? 0 : db_num;
-            int db_num_end = db_num == -1 ? redis_client.RedisServer.DatabaseCount - 1 : db_num;
+            int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -673,7 +673,7 @@ namespace RedisGuiManager
                 toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
                 Application.DoEvents();
 
-                var keys = redis_client.RedisServer.Keys(i, textBox_keys_filter.Text, Config.scan_page_count);
+                var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
 
                 toolStripProgressBar_status.Value = 0;
                 toolStripProgressBar_status.Maximum = keys.Count();

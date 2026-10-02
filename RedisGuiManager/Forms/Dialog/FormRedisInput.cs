@@ -40,7 +40,7 @@ namespace RedisGuiManager
             }
             else
             {
-                if (redis.StringSet(textBox_string_key.Text, textBox_string_value.Text))
+                if (redis.StringSet(textBox_string_key.Text, textBox_string_value.Text, when: When.NotExists))
                 {
                     Close();
                 }

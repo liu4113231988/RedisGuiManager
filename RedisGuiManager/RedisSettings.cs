@@ -22,6 +22,7 @@ namespace RedisGuiManager
 
     public class RedisSettings
     {
+        [JsonConverter(typeof(CredentialConverter))]
         public string auth { get; set; }
         public string host { get; set; }
         public string name { get; set; }
@@ -32,6 +33,7 @@ namespace RedisGuiManager
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string ssh_host { get; set; }
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(CredentialConverter))]
         public string ssh_password { get; set; }
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public int ssh_port { get; set; } = 22;

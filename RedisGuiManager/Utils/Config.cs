@@ -10,7 +10,7 @@ namespace RedisGuiManager
 {
     public class Config
     {
-        public static int scan_page_count = 100000;
+        public static int scan_page_count = 1000;
         public static int dp_type;
         public static int mainform_is_maximized;
         public static int mainform_pos_x;

@@ -78,25 +78,37 @@ namespace RedisGuiManager
             }
 
             var read = redisClient.Redis.StringGet(stringKeyName);
-            valueControl.SetValue(read.ToString());
+            valueControl.SetValue(read);
         }
 
         private void button_save_Click(object sender, EventArgs e)
         {
-            string save_text = valueControl.EditedValue();
-            if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
+            try
             {
-                try
+                if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex)
                 {
-                    save_text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(save_text), Formatting.None);
+                    MessageBox.Show("Binary/Hex values are read-only. Switch to text for text values.");
+                    return;
                 }
-                catch (JsonReaderException)
+                string save_text = valueControl.EditedValue();
+                if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
                 {
+                    try
+                    {
+                        save_text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(save_text), Formatting.None);
+                    }
+                    catch (JsonReaderException)
+                    {
+                    }
                 }
-            }
 
-            redisClient.Redis.StringSet(stringKeyName, save_text);
-            RefreshKey();
+                redisClient.Redis.StringSet(stringKeyName, save_text, expiry: null, keepTtl: true);
+                RefreshKey();
+            }
+            catch (StackExchange.Redis.RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+            }
         }
     }
 }

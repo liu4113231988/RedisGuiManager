@@ -60,29 +60,18 @@ namespace RedisGuiManager
 
         private void button_ttl_Click(object sender, EventArgs e)
         {
-            if (redisClient != null)
+            try
             {
-                using (FormInputString formInput = new FormInputString())
+                if (redisClient != null)
                 {
-                    formInput.TextInfo = "New ttl(seconds), -1 means permanent";
-                    if (formInput.ShowDialog() == DialogResult.OK)
+                    using (FormInputString formInput = new FormInputString())
                     {
-                        if (formInput.InputValue == "-1")
+                        formInput.TextInfo = "New ttl(seconds), -1 means permanent";
+                        if (formInput.ShowDialog() == DialogResult.OK)
                         {
-                            if (redisClient.Redis.KeyPersist(keyName))
+                            if (formInput.InputValue == "-1")
                             {
-                                MessageBox.Show("Set ttl success");
-                            }
-                            else
-                            {
-                                MessageBox.Show("Set ttl failed");
-                            }
-                        }
-                        else
-                        {
-                            if (int.TryParse(formInput.InputValue, out int seconds))
-                            {
-                                if (redisClient.Redis.KeyExpire(keyName, new TimeSpan(0, 0, seconds)))
+                                if (redisClient.Redis.KeyPersist(keyName))
                                 {
                                     MessageBox.Show("Set ttl success");
                                 }
@@ -93,39 +82,65 @@ namespace RedisGuiManager
                             }
                             else
                             {
-                                MessageBox.Show("Please enter the number. not text");
+                                if (int.TryParse(formInput.InputValue, out int seconds) && seconds >= 0)
+                                {
+                                    if (redisClient.Redis.KeyExpire(keyName, new TimeSpan(0, 0, seconds)))
+                                    {
+                                        MessageBox.Show("Set ttl success");
+                                    }
+                                    else
+                                    {
+                                        MessageBox.Show("Set ttl failed");
+                                    }
+                                }
+                                else
+                                {
+                                    MessageBox.Show("Please enter the number. not text");
+                                }
                             }
                         }
                     }
                 }
             }
+            catch (StackExchange.Redis.RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+            }
         }
 
         private void button_rename_Click(object sender, EventArgs e)
         {
-            if (redisClient != null)
+            try
             {
-                using (FormInputString formInput = new FormInputString())
+                if (redisClient != null)
                 {
-                    formInput.TextInfo = string.Format("Rename key [{0}]", keyName);
-                    if (formInput.ShowDialog() == DialogResult.OK)
+                    using (FormInputString formInput = new FormInputString())
                     {
-                        if (redisClient.Redis.KeyRename(keyName, formInput.InputValue))
+                        formInput.TextInfo = string.Format("Rename key [{0}]", keyName);
+                        if (formInput.ShowDialog() == DialogResult.OK)
                         {
-                            MessageBox.Show("Rename success");
-                        }
-                        else
-                        {
-                            MessageBox.Show("Rename failed");
+                            if (!string.IsNullOrEmpty(formInput.InputValue) && redisClient.Redis.KeyRename(keyName, formInput.InputValue, StackExchange.Redis.When.NotExists))
+                            {
+                                MainForm.RefreshRenamedKey(TargetNode, keyName, formInput.InputValue);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Rename failed");
+                            }
                         }
                     }
                 }
+            }
+            catch (StackExchange.Redis.RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
             }
         }
 
 
         private static string FormatTTLShort(long seconds)
         {
+            if (seconds == -2) return "missing";
             if (seconds < 0) return "∞";
             if (seconds < 60) return $"{seconds}s";
             if (seconds < 3600) return $"{seconds / 60}m{seconds % 60}s";

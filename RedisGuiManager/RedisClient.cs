@@ -47,7 +47,8 @@ namespace RedisGuiManager
                 ConnectTimeout = connectTimeout,
                 DefaultDatabase = 0,
                 Password = settings.auth,
-                Ssl = settings.use_ssl
+                Ssl = settings.use_ssl,
+                SslHost = settings.use_ssl ? settings.host : null
             };
 
             if (isTunnel)
@@ -129,7 +130,7 @@ namespace RedisGuiManager
                     }
                     else
                     {
-                        sshConnInfo = new PrivateKeyConnectionInfo(settings.ssh_host, settings.ssh_user, new PrivateKeyFile(settings.ssh_key))
+                        sshConnInfo = new PrivateKeyConnectionInfo(settings.ssh_host, settings.ssh_port, settings.ssh_user, new PrivateKeyFile(settings.ssh_key))
                         {
                             Timeout = TimeSpan.FromSeconds(60)
                         };
@@ -194,18 +195,45 @@ namespace RedisGuiManager
         {
             if (connection != null)
             {
-                connection.Close();
+                connection.Dispose();
+                connection = null;
+                Redis = null;
+                RedisServer = null;
             }
 
             if (Tunnel != null && Tunnel.IsStarted)
             {
-                Tunnel.Stop();
+                Tunnel.Dispose();
+                Tunnel = null;
             }
 
-            if (TunnelSsh != null && TunnelSsh.IsConnected)
+            if (TunnelSsh != null)
             {
-                TunnelSsh.Disconnect();
+                TunnelSsh.Dispose();
+                TunnelSsh = null;
             }
+        }
+
+        public IEnumerable<StackExchange.Redis.RedisKey> ScanKeys(int database, string pattern = "*", int pageSize = 1000)
+        {
+            if (connection == null) throw new InvalidOperationException("Redis not connected");
+            if (!settings.use_cluster) return RedisServer.Keys(database, pattern, pageSize);
+            if (database != 0) throw new ArgumentOutOfRangeException(nameof(database), "Cluster supports DB 0 only");
+            var servers = ClusterPrimaryServers();
+            return servers.SelectMany(s => s.Keys(0, pattern, pageSize)).Distinct();
+        }
+
+        private IServer[] ClusterPrimaryServers()
+        {
+            var servers = connection.GetEndPoints().Select(ep => connection.GetServer(ep)).Where(s => !s.IsReplica).ToArray();
+            if (servers.Length == 0 || servers.Any(s => !s.IsConnected))
+                throw new InvalidOperationException("Not all cluster primary nodes are connected");
+            return servers;
+        }
+
+        public long DatabaseSize(int database)
+        {
+            return settings.use_cluster ? ClusterPrimaryServers().Sum(s => s.DatabaseSize(database)) : RedisServer.DatabaseSize(database);
         }
 
         public OperateResult SelectDB(int db_num)

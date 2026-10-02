@@ -132,23 +132,33 @@ namespace RedisGuiManager
 
         private void button_delete_row_Click(object sender, EventArgs e)
         {
-            if (selectRow != null)
+            try
             {
-                int selectIndex = int.Parse(selectRow.Cells[0].Value.ToString());
-                if (MessageBox.Show(string.Format("Delete Key:{0} Index:{1}", stringKeyName, selectIndex), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                if (selectRow != null)
                 {
-                    string randomValue = "Remove:" + Guid.NewGuid().ToString();
-                    redisClient.Redis.ListSetByIndex(stringKeyName, selectIndex, randomValue);
-                    if (redisClient.Redis.ListRemove(stringKeyName, randomValue) > 0)
+                    int selectIndex = int.Parse(selectRow.Cells[0].Value.ToString());
+                    if (MessageBox.Show(string.Format("Delete Key:{0} Index:{1}", stringKeyName, selectIndex), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                     {
-                        MessageBox.Show(string.Format("Delete index:{0} success", selectIndex));
-                        RefreshKey();
-                    }
-                    else
-                    {
-                        MessageBox.Show(string.Format("Delete index:{0} fail", selectIndex));
+                        string randomValue = "Remove:" + Guid.NewGuid().ToString();
+                        if ((long)redisClient.Redis.ScriptEvaluate(
+                            "if redis.call('LINDEX',KEYS[1],ARGV[1]) ~= ARGV[2] then return redis.error_reply('List changed; refresh first') end; redis.call('LSET',KEYS[1],ARGV[1],ARGV[3]); return redis.call('LREM',KEYS[1],1,ARGV[3])",
+                            new StackExchange.Redis.RedisKey[] { stringKeyName },
+                            new StackExchange.Redis.RedisValue[] { selectIndex, selectRow.Cells[1].Value.ToString(), randomValue }) > 0)
+                        {
+                            MessageBox.Show(string.Format("Delete index:{0} success", selectIndex));
+                            RefreshKey();
+                        }
+                        else
+                        {
+                            MessageBox.Show(string.Format("Delete index:{0} fail", selectIndex));
+                        }
                     }
                 }
+
+            }
+            catch (StackExchange.Redis.RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
             }
         }
 

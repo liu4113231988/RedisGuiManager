@@ -8,12 +8,14 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Net;
+using Newtonsoft.Json;
 
 namespace RedisGuiManager
 {
     public partial class FormRedisAdd : Form
     {
         private RedisSettings settings = null;
+        private RedisSettings originalSettings;
         public RedisSettings Settings
         {
             get { return settings; }
@@ -28,12 +30,13 @@ namespace RedisGuiManager
                 Utils.DarkThemeForm(this);
             }
 
-            settings = redisSettings ?? new RedisSettings()
+            originalSettings = redisSettings;
+            settings = redisSettings == null ? new RedisSettings()
             {
                 host = "127.0.0.1",
                 port = 6379,
                 auth = string.Empty
-            };
+            } : JsonConvert.DeserializeObject<RedisSettings>(JsonConvert.SerializeObject(redisSettings));
 
             if (redisSettings != null)
             {
@@ -103,14 +106,14 @@ namespace RedisGuiManager
                 }
             }
 
-            if (int.TryParse(textBox_port.Text, out int port) == false)
+            if (int.TryParse(textBox_port.Text, out int port) == false || port < 1 || port > 65535)
             {
                 MessageBox.Show("Invalid port");
 
                 return false;
             }
 
-            if (int.TryParse(textBox_tunnel_port.Text, out int tunnel_port) == false)
+            if (int.TryParse(textBox_tunnel_port.Text, out int tunnel_port) == false || tunnel_port < 1 || tunnel_port > 65535)
             {
                 MessageBox.Show("Invalid tunnel port");
 
@@ -178,6 +181,11 @@ namespace RedisGuiManager
             settings.use_cluster = checkBox_use_cluster.Checked;
             settings.cluster_endpoints = textBox_cluster_endpoints.Text;
 
+            if (originalSettings != null)
+            {
+                JsonConvert.PopulateObject(JsonConvert.SerializeObject(settings), originalSettings, new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+                settings = originalSettings;
+            }
             DialogResult = DialogResult.OK;
         }
 

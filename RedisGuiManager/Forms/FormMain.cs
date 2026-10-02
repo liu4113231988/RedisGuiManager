@@ -26,6 +26,7 @@ namespace RedisGuiManager
         private Dictionary<RedisSettings, string> _settingFileMap = new Dictionary<RedisSettings, string>();
         private Dictionary<RedisGroup, string> _groupFileMap = new Dictionary<RedisGroup, string>();
         private HashSet<string> _knownFiles = new HashSet<string>();
+        private HashSet<string> _failedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public FormMain()
         {
@@ -100,6 +101,8 @@ namespace RedisGuiManager
             redis_settings.Clear();
             _settingFileMap.Clear();
             _groupFileMap.Clear();
+            _knownFiles.Clear();
+            _failedFiles.Clear();
             treeView_server.Nodes.Clear();
         }
 
@@ -119,6 +122,7 @@ namespace RedisGuiManager
 
             this.Text = "Redis Gui Manager";
             _knownFiles.Clear();
+            _failedFiles.Clear();
             var loadErrors = new List<string>();
 
             try
@@ -193,6 +197,7 @@ namespace RedisGuiManager
                     }
                     catch (Exception ex)
                     {
+                        _failedFiles.Add(fullPath);
                         string msg = $"Load failed: {Path.GetFileName(path)} - {ex.Message}";
                         loadErrors.Add(msg);
                     }
@@ -638,7 +643,7 @@ namespace RedisGuiManager
                         int deleted_count = 0;
                         foreach (int db_num in db_nums)
 						{
-                            var reads = client.RedisServer.Keys(db_num, formInput.InputValue, Config.scan_page_count);
+                            var reads = client.ScanKeys(db_num, formInput.InputValue, Config.scan_page_count);
                             var database = client.GetDB(db_num);
 
 							foreach (var key in reads)
@@ -685,9 +690,9 @@ namespace RedisGuiManager
 						formInput.InputValue != "")
 					{
 						int deleted_count = 0;
-						for (int db_num = 0; db_num < client.RedisServer.DatabaseCount; ++db_num)
+						for (int db_num = 0; db_num < (client.Settings.use_cluster ? 1 : client.RedisServer.DatabaseCount); ++db_num)
 						{
-							var reads = client.RedisServer.Keys(db_num, formInput.InputValue, Config.scan_page_count);
+							var reads = client.ScanKeys(db_num, formInput.InputValue, Config.scan_page_count);
 							var database = client.GetDB(db_num);
 
 							foreach (var key in reads)
@@ -816,9 +821,10 @@ namespace RedisGuiManager
                 try
                 {
                     var database = redisClient.GetDB(dbSettings.DBNumber);
-                    var keys = redisClient.RedisServer.Keys(dbSettings.DBNumber, "*", Config.scan_page_count);
+                    var keys = redisClient.ScanKeys(dbSettings.DBNumber, "*", Config.scan_page_count);
 
                     var exportData = new List<object>();
+                    int exportErrors = 0;
                     int count = 0;
 
                     foreach (var key in keys)
@@ -832,6 +838,11 @@ namespace RedisGuiManager
 
                         try
                         {
+                            var snapshot = (RedisResult[])database.ScriptEvaluate(
+                                "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
+                                new StackExchange.Redis.RedisKey[] { key });
+                            entry["dump"] = Convert.ToBase64String((byte[])snapshot[0]);
+                            entry["pttl"] = (long)snapshot[1];
                             switch (keyType)
                             {
                                 case RedisType.String:
@@ -866,6 +877,7 @@ namespace RedisGuiManager
                         catch (Exception ex)
                         {
                             entry["error"] = ex.Message;
+                            exportErrors++;
                         }
 
                         exportData.Add(entry);
@@ -881,7 +893,7 @@ namespace RedisGuiManager
                     string json = JsonConvert.SerializeObject(exportData, Formatting.Indented);
                     System.IO.File.WriteAllText(sfd.FileName, json);
 
-                    MessageBox.Show($"Export completed!\r\n\r\nKeys: {count}\r\nFile: {sfd.FileName}", "Export Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show($"Export completed!\r\n\r\nKeys: {count}\r\nFailed entries: {exportErrors}\r\nFile: {sfd.FileName}", "Export Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     toolStripStatusLabel1.Text = $"Exported {count} keys";
                 }
                 catch (Exception ex)
@@ -917,90 +929,103 @@ namespace RedisGuiManager
                         return;
                     }
 
-                    if (MessageBox.Show($"Import {importData.Count} keys to DB {dbSettings.DBNumber}?", "Confirm Import", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    if (MessageBox.Show($"Import {importData.Count} keys to DB {dbSettings.DBNumber}? Existing keys will be skipped.", "Confirm Import", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                         return;
 
                     var database = redisClient.GetDB(dbSettings.DBNumber);
-                    int success = 0, fail = 0;
+                    int success = 0, fail = 0, skipped = 0;
+                    var errors = new List<string>();
 
                     for (int i = 0; i < importData.Count; i++)
                     {
                         var entry = importData[i];
-                        string key = entry["key"]?.ToString();
-                        string type = entry["type"]?.ToString();
+                        string key = entry != null && entry.TryGetValue("key", out var keyObj) ? keyObj?.ToString() : null;
+                        string type = entry != null && entry.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : null;
 
-                        if (string.IsNullOrEmpty(key)) { fail++; continue; }
+                        if (string.IsNullOrEmpty(key)) { fail++; errors.Add($"Entry {i + 1}: missing key"); continue; }
 
                         try
                         {
-                            var value = entry["value"];
-                            string valueJson = JsonConvert.SerializeObject(value);
-
+                            if (entry.ContainsKey("error")) throw new InvalidDataException("Export entry contains an error");
+                            if (database.KeyExists(key)) { skipped++; continue; }
+                            if (entry.TryGetValue("dump", out var dump))
+                            {
+                                byte[] payload = Convert.FromBase64String(dump.ToString());
+                                long ttl = Convert.ToInt64(entry["pttl"]);
+                                if (ttl < -1) throw new InvalidDataException("Invalid TTL");
+                                if (ttl == 0) { skipped++; continue; }
+                                database.Execute("RESTORE", key, ttl < 0 ? 0 : ttl, payload);
+                                success++;
+                                continue;
+                            }
+                            var value = JToken.FromObject(entry["value"] ?? throw new InvalidDataException("Missing value"));
+                            var commands = new List<string[]>();
                             switch (type)
                             {
                                 case "String":
-                                    database.StringSet(key, value?.ToString());
+                                    if (value.Type != JTokenType.String) throw new InvalidDataException("Expected text value");
+                                    commands.Add(new[] { "SET", key, value.ToString() });
                                     break;
                                 case "Hash":
-                                    var hashItems = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(valueJson);
-                                    if (hashItems != null && hashItems.Count > 0)
-                                    {
-                                        var hashEntries = hashItems.Select(h => new HashEntry(h["field"].ToString(), h["value"].ToString())).ToArray();
-                                        database.HashSet(key, hashEntries);
-                                    }
+                                    foreach (var item in (JArray)value)
+                                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException("Missing field"), item["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value") });
                                     break;
                                 case "List":
-                                    var listItems = JsonConvert.DeserializeObject<List<string>>(valueJson);
-                                    if (listItems != null && listItems.Count > 0)
-                                    {
-                                        database.ListRightPush(key, listItems.Select(v => (RedisValue)v).ToArray());
-                                    }
-                                    break;
                                 case "Set":
-                                    var setItems = JsonConvert.DeserializeObject<List<string>>(valueJson);
-                                    if (setItems != null && setItems.Count > 0)
+                                    foreach (var item in (JArray)value)
                                     {
-                                        database.SetAdd(key, setItems.Select(v => (RedisValue)v).ToArray());
+                                        if (item.Type != JTokenType.String) throw new InvalidDataException("Expected text member");
+                                        commands.Add(new[] { type == "List" ? "RPUSH" : "SADD", key, item.ToString() });
                                     }
                                     break;
                                 case "SortedSet":
-                                    var zsetItems = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(valueJson);
-                                    if (zsetItems != null && zsetItems.Count > 0)
+                                    foreach (var item in (JArray)value)
                                     {
-                                        var sortedEntries = zsetItems.Select(z => new SortedSetEntry(z["member"].ToString(), double.Parse(z["score"].ToString()))).ToArray();
-                                        database.SortedSetAdd(key, sortedEntries);
+                                        double score = item["score"].Value<double>();
+                                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException("Invalid score");
+                                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException("Missing member") });
                                     }
                                     break;
                                 case "Stream":
-                                    var streamItems = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(valueJson);
-                                    if (streamItems != null && streamItems.Count > 0)
+                                    ulong previousMs = 0, previousSeq = 0;
+                                    foreach (var item in (JArray)value)
                                     {
-                                        foreach (var si in streamItems)
+                                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException("Missing stream ID");
+                                        var parts = id.Split('-');
+                                        if (parts.Length != 2 || !ulong.TryParse(parts[0], out ulong ms) || !ulong.TryParse(parts[1], out ulong seq) || ms < previousMs || (ms == previousMs && seq <= previousSeq))
+                                            throw new InvalidDataException("Stream IDs must be valid and increasing");
+                                        previousMs = ms; previousSeq = seq;
+                                        var command = new List<string> { "XADD", key, id };
+                                        foreach (var field in (JArray)item["fields"])
                                         {
-                                            string id = si["id"]?.ToString() ?? "*";
-                                            var fields = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(JsonConvert.SerializeObject(si["fields"]));
-                                            if (fields != null && fields.Count > 0)
-                                            {
-                                                var nameValues = fields.Select(f => new NameValueEntry(f["name"].ToString(), f["value"].ToString())).ToArray();
-                                                database.StreamAdd(key, nameValues, id);
-                                            }
+                                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException("Missing field"));
+                                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value"));
                                         }
+                                        if (command.Count == 3) throw new InvalidDataException("Stream entry has no fields");
+                                        commands.Add(command.ToArray());
                                     }
                                     break;
+                                default: throw new InvalidDataException("Unsupported type: " + type);
                             }
-
+                            if (commands.Count == 0) throw new InvalidDataException("Empty collection cannot be restored");
+                            long legacyTtl = -1;
                             if (entry.TryGetValue("ttl", out var ttlObj) && ttlObj != null)
                             {
-                                if (long.TryParse(ttlObj.ToString(), out long ttlSec) && ttlSec > 0)
-                                {
-                                    database.KeyExpire(key, TimeSpan.FromSeconds(ttlSec));
-                                }
+                                legacyTtl = Convert.ToInt64(ttlObj);
+                                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException("Invalid TTL");
+                                if (legacyTtl == 0) { skipped++; continue; }
                             }
+                            var imported = (long)database.ScriptEvaluate(
+                                "if redis.call('EXISTS',KEYS[1]) == 1 then return 0 end; local commands=cjson.decode(ARGV[1]); for _,cmd in ipairs(commands) do redis.call(unpack(cmd)) end; if tonumber(ARGV[2]) > 0 then redis.call('PEXPIRE',KEYS[1],ARGV[2]) end; return 1",
+                                new StackExchange.Redis.RedisKey[] { key },
+                                new RedisValue[] { JsonConvert.SerializeObject(commands), legacyTtl < 0 ? -1 : legacyTtl * 1000 });
+                            if (imported == 0) { skipped++; continue; }
 
                             success++;
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            errors.Add($"Entry {i + 1} ({key}): {ex.Message}");
                             fail++;
                         }
 
@@ -1011,7 +1036,7 @@ namespace RedisGuiManager
                         }
                     }
 
-                    MessageBox.Show($"Import completed!\r\n\r\nSuccess: {success}\r\nFailed: {fail}", "Import Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show($"Import completed!\r\n\r\nSuccess: {success}\r\nFailed: {fail}\r\nSkipped (existing/expired): {skipped}\r\n" + string.Join("\r\n", errors.Take(10)), "Import Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     toolStripStatusLabel1.Text = $"Imported {success} keys";
                 }
                 catch (Exception ex)
@@ -1195,7 +1220,7 @@ namespace RedisGuiManager
                         formInput.InputValue != "")
 					{
                         RedisClient redisClient = select.Parent.Tag as RedisClient;
-                        var reads = redisClient.RedisServer.Keys(dbSettings.DBNumber, formInput.InputValue, Config.scan_page_count);
+                        var reads = redisClient.ScanKeys(dbSettings.DBNumber, formInput.InputValue, Config.scan_page_count);
                         var database = redisClient.GetDB(dbSettings.DBNumber);
 
                         int deleted_count = 0;
@@ -1558,7 +1583,7 @@ namespace RedisGuiManager
                     {
                         if (redisClient.Settings.hide_default_dbs == false)
                         {
-                            for (int i = 0; i < 16; i++)
+                            for (int i = 0; i < redisClient.RedisServer.DatabaseCount; i++)
                             {
                                 AddTreeNode_DB(redisClient, i, select);
                             }
@@ -1624,7 +1649,7 @@ namespace RedisGuiManager
                         redisClient.DBBlock = dbBlock;
                     }
 
-                    var reads = redisClient.RedisServer.Keys(dbBlock, "*", Config.scan_page_count);
+                    var reads = redisClient.ScanKeys(dbBlock, "*", Config.scan_page_count).ToArray();
                     int keyCount = reads.Count();
 
                     List<string> list_keys = new List<string>();
@@ -1773,28 +1798,16 @@ namespace RedisGuiManager
 
             try
             {
-                var reads = redisClient.RedisServer.Keys(dbNum, "*", Config.scan_page_count);
-                int keyCount = reads.Count();
-
-                List<string> list_keys = new List<string>();
-                foreach (var item in reads)
-                {
-                    if (item == "")
-					{
-                        continue;
-					}
-
-                    list_keys.Add(item.ToString());
-                }
+                long keyCount = redisClient.DatabaseSize(dbNum);
 
                 TreeNode dbTree = new TreeNode(string.Format("db{0} ({1})", dbNum, keyCount));
                 dbTree.ImageKey = "redis_db";
                 dbTree.SelectedImageKey = "redis_db";
-                dbTree.Tag = new DbSettings() { DBNumber = dbNum, Keys = list_keys };
+                dbTree.Tag = new DbSettings() { DBNumber = dbNum, Keys = null };
 
                 select.Nodes.Add(dbTree);
 
-                BuildTreeNode_DB(dbTree, list_keys);
+                // Load keys only when the database is selected.
             }
             catch (RedisCommandException ex)
 			{
@@ -2049,6 +2062,7 @@ namespace RedisGuiManager
             {
                 string connDir = GetConnectionsDir();
                 string defaultFull = Path.GetFullPath(GetDefaultConnectionsFile());
+                if (_failedFiles.Contains(defaultFull)) defaultFull = Path.Combine(GetConnectionsDir(), "connections.recovered.json");
                 if (!Directory.Exists(connDir))
                     Directory.CreateDirectory(connDir);
 
@@ -2058,7 +2072,7 @@ namespace RedisGuiManager
                 // ensure known files are considered
                 foreach (var f in _knownFiles)
                 {
-                    if (!fileMap.ContainsKey(f))
+                    if (!_failedFiles.Contains(f) && !fileMap.ContainsKey(f))
                         fileMap[f] = new JArray();
                 }
 
@@ -2099,9 +2113,10 @@ namespace RedisGuiManager
                         _knownFiles.Add(target);
                 }
 
-                // 原子写入：先写临时文件再 Move，避免崩溃导致文件损坏
+                // Replace atomically and keep the previous version as a backup.
                 foreach (var kv in fileMap)
                 {
+                    if (_failedFiles.Contains(kv.Key)) continue;
                     try
                     {
                         string dir = Path.GetDirectoryName(kv.Key);
@@ -2109,8 +2124,8 @@ namespace RedisGuiManager
                             Directory.CreateDirectory(dir);
                         string tmp = kv.Key + ".tmp";
                         File.WriteAllText(tmp, kv.Value.ToString(Formatting.Indented), Encoding.UTF8);
-                        File.Copy(tmp, kv.Key, true);
-                        File.Delete(tmp);
+                        if (File.Exists(kv.Key)) File.Replace(tmp, kv.Key, kv.Key + ".bak");
+                        else File.Move(tmp, kv.Key);
                     }
                     catch (Exception ex)
                     {
@@ -2177,6 +2192,7 @@ namespace RedisGuiManager
                 redis_settings.Add(form.Settings);
                 form.Settings.redis_client = new RedisClient(form.Settings);
                 string defaultFull = Path.GetFullPath(GetDefaultConnectionsFile());
+                if (_failedFiles.Contains(defaultFull)) defaultFull = Path.Combine(GetConnectionsDir(), "connections.recovered.json");
                 _settingFileMap[form.Settings] = defaultFull;
                 _knownFiles.Add(defaultFull);
                 SaveRedisSettings();
@@ -2213,6 +2229,17 @@ namespace RedisGuiManager
                 Config.mainform_width = Width;
                 Config.mainform_height = Height;
             }
+        }
+
+        public void RefreshRenamedKey(TreeNode node, string oldName, string newName)
+        {
+            var dbNode = GetDbNode(node);
+            var settings = (DbSettings)dbNode.Tag;
+            settings.Keys.Remove(oldName);
+            settings.Keys.Add(newName);
+            node.Text = newName;
+            CreateRedisShowTagControl<StartControl>();
+            treeView_server_AfterSelect(treeView_server, new TreeViewEventArgs(node));
         }
 
         public void delete_key_operate(TreeNode select, IDatabase database)
@@ -2336,11 +2363,11 @@ namespace RedisGuiManager
                 string message;
                 if (ttl == null)
                 {
-                    message = "Key has no associated TTL (permanent).";
+                    message = database.KeyExists(select.Text) ? "Key has no associated TTL (permanent)." : "Key does not exist.";
                 }
                 else if (ttl.Value.TotalSeconds < 0)
                 {
-                    message = "Key has no associated TTL (permanent).";
+                    message = database.KeyExists(select.Text) ? "Key has no associated TTL (permanent)." : "Key does not exist.";
                 }
                 else
                 {
@@ -2369,7 +2396,7 @@ namespace RedisGuiManager
 
                 if (formInput.ShowDialog() == DialogResult.OK)
                 {
-                    if (long.TryParse(formInput.InputValue, out long seconds))
+                    if (long.TryParse(formInput.InputValue, out long seconds) && seconds >= -1 && seconds <= TimeSpan.MaxValue.TotalSeconds)
                     {
                         if (seconds == -1)
                         {
@@ -2522,54 +2549,22 @@ namespace RedisGuiManager
                 return false;
 			}
 
-			var type = src_db.KeyType(src_key);
-			switch (type)
-			{
-				case StackExchange.Redis.RedisType.String:
-				{
-					dst_db.StringSet(dst_key, src_db.StringGet(src_key));
-				}
-				break;
-				case StackExchange.Redis.RedisType.List:
-				{
-                    dst_db.ListRightPush(dst_key, src_db.ListRange(src_key));
-				}
-				break;
-				case StackExchange.Redis.RedisType.Hash:
-				{
-                    dst_db.HashSet(dst_key, src_db.HashGetAll(src_key));
-				}
-				break;
-				case StackExchange.Redis.RedisType.Set:
-				{
-                    dst_db.SetAdd(dst_key, src_db.SetMembers(src_key));
-				}
-				break;
-				case StackExchange.Redis.RedisType.SortedSet:
-				{
-                    dst_db.SortedSetAdd(dst_key, src_db.SortedSetRangeByScoreWithScores(src_key));
-				}
-				break;
-				case StackExchange.Redis.RedisType.Stream:
-				{
-					var vals = src_db.StreamRange(src_key);
-					if (vals.Length > 0)
-					{
-						foreach (var entry in vals)
-						{
-							dst_db.StreamAdd(dst_key, entry.Values, entry.Id);
-						}
-					}
-				}
-				break;
-				default:
-				{
-					MessageBox.Show($"{src_key} is not exist", "Copy failed");
-                    return false;
-				}
-			}
+            try
+            {
+            var snapshot = (RedisResult[])src_db.ScriptEvaluate(
+                "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Source key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
+                new StackExchange.Redis.RedisKey[] { src_key });
+            long ttl = (long)snapshot[1];
+            dst_db.Execute("RESTORE", dst_key, ttl < 0 ? 0 : Math.Max(1, ttl), (byte[])snapshot[0]);
 
             return true;
+            }
+            catch (RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Copy failed");
+                return false;
+            }
+
 		}
 
 		private void copy_key_ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -2728,7 +2723,7 @@ namespace RedisGuiManager
 					if (formInput.ShowDialog() == DialogResult.OK)
 					{
 						RedisClient redisClient = select.Parent.Tag as RedisClient;
-						var reads = redisClient.RedisServer.Keys(dbSettings.DBNumber, formInput.KeyPattern, Config.scan_page_count);
+						var reads = redisClient.ScanKeys(dbSettings.DBNumber, formInput.KeyPattern, Config.scan_page_count);
 						var db = redisClient.GetDB(dbSettings.DBNumber);
 
                         IPEndPoint end_point = new IPEndPoint(IPAddress.Parse(formInput.Host), formInput.Port);

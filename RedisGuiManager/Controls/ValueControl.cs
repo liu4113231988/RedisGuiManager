@@ -26,6 +26,8 @@ namespace RedisGuiManager
         }
 
         private RedisValue value;
+        private string hexTempFile;
+        public bool CanEditText { get; private set; } = true;
 
         private int lastSeachIndex = -1;
         private string searchCondition = string.Empty;
@@ -105,7 +107,17 @@ namespace RedisGuiManager
                 this.value = (RedisValue)value;
             }
 
+            byte[] bytes = (byte[])this.value;
+            CanEditText = bytes == null || Encoding.UTF8.GetBytes(this.value.ToString()).SequenceEqual(bytes);
+            textBox_value.ReadOnly = !CanEditText;
             ShowValue();
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            hexEditor_value.CloseProvider();
+            if (hexTempFile != null) File.Delete(hexTempFile);
+            base.OnHandleDestroyed(e);
         }
 
         private void ShowValue()
@@ -157,22 +169,11 @@ namespace RedisGuiManager
                 }
                 else if (radioButton_display_type_hex.Checked)
 				{
-                    object box = value.Box();
-                    if (box == null)
-					{
-					}
-                    else if (box is byte[] bytes)
-					{
-                        string tempFile = System.IO.Path.GetTempFileName();
-                        System.IO.File.WriteAllBytes(tempFile, bytes);
-                        hexEditor_value.FileName = tempFile;
-                    }
-                    else
-					{
-                        string tempFile = System.IO.Path.GetTempFileName();
-                        System.IO.File.WriteAllBytes(tempFile, Encoding.UTF8.GetBytes(value.ToString()));
-                        hexEditor_value.FileName = tempFile;
-                    }
+                    hexEditor_value.CloseProvider();
+                    if (hexTempFile != null) File.Delete(hexTempFile);
+                    hexTempFile = Path.GetTempFileName();
+                    File.WriteAllBytes(hexTempFile, (byte[])value ?? Array.Empty<byte>());
+                    hexEditor_value.FileName = hexTempFile;
                 }
             }
             catch
@@ -186,6 +187,7 @@ namespace RedisGuiManager
             radioButton_display_type_text.CheckedChanged += radioButton_display_type_CheckedChanged;
             radioButton_display_type_json.CheckedChanged += radioButton_display_type_CheckedChanged;
             radioButton_display_type_xml.CheckedChanged += radioButton_display_type_CheckedChanged;
+            radioButton_display_type_hex.CheckedChanged += radioButton_display_type_CheckedChanged;
         }
 
         private void radioButton_display_type_CheckedChanged(object sender, EventArgs e)

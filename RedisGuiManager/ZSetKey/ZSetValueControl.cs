@@ -215,35 +215,45 @@ namespace RedisGuiManager
 
 		private void button_save_Click(object sender, EventArgs e)
 		{
-			if (dataGridView_zset.SelectedRows.Count <= 0)
-			{
-				return;
-			}
+            try
+            {
+                if (dataGridView_zset.SelectedRows.Count <= 0)
+                {
+                    return;
+                }
 
-			string save_text = valueControl.EditedValue();
-			if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
-			{
-				try
-				{
-					save_text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(save_text), Formatting.None);
-				}
-				catch (JsonReaderException)
-				{
-				}
-			}
+                string save_text = valueControl.EditedValue();
+                if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
+                {
+                    try
+                    {
+                        save_text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(save_text), Formatting.None);
+                    }
+                    catch (JsonReaderException)
+                    {
+                    }
+                }
 
-            double score = 0;
-            if (double.TryParse(textBox_score.Text, out score) == false)
-			{
-                MessageBox.Show("input score as number");
-                return;
-			}
+                double score = 0;
+                if (double.TryParse(textBox_score.Text, out score) == false || double.IsNaN(score) || double.IsInfinity(score))
+                {
+                    MessageBox.Show("input score as number");
+                    return;
+                }
 
-            redisClient.Redis.SortedSetRemove(stringKeyName, selectRow.Cells[1].Value.ToString());
-            redisClient.Redis.SortedSetAdd(stringKeyName, save_text, score);
+                redisClient.Redis.ScriptEvaluate(
+                    "if not redis.call('ZSCORE',KEYS[1],ARGV[1]) then return redis.error_reply('Member changed; refresh first') end; redis.call('ZADD',KEYS[1],ARGV[3],ARGV[2]); if ARGV[1] ~= ARGV[2] then redis.call('ZREM',KEYS[1],ARGV[1]) end; return 1",
+                    new StackExchange.Redis.RedisKey[] { stringKeyName },
+                    new StackExchange.Redis.RedisValue[] { selectRow.Cells[1].Value.ToString(), save_text, score });
 
-            RefreshKey();
-		}
+                RefreshKey();
+
+            }
+            catch (StackExchange.Redis.RedisException ex)
+            {
+                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+            }
+        }
 
 		private void search_field_loop()
         {
