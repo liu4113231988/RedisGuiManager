@@ -13,9 +13,10 @@ namespace RedisGuiManager
     public partial class ListValueInsertForm : Form
     {
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
         private string key = string.Empty;
 
-        public ListValueInsertForm(RedisClient client, string key)
+        public ListValueInsertForm(RedisClient client, string key, StackExchange.Redis.IDatabase database = null)
         {
             InitializeComponent();
 
@@ -25,6 +26,7 @@ namespace RedisGuiManager
             }
 
             this.redisClient = client;
+            this.database = database ?? client.Redis;
             this.key = key;
         }
 
@@ -32,7 +34,7 @@ namespace RedisGuiManager
         {
             textBox_server.Text = string.Format("{0} [{1}:{2}]", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port);
             textBox_key.Text = this.key;
-            textBox_db_num.Text = this.redisClient.DBBlock.ToString();
+            textBox_db_num.Text = this.database.Database.ToString();
 
             Icon = Icon.FromHandle(Properties.Resources.brackets_Square_16xMD.GetHicon());
             ListValueInsertForm_SizeChanged(null, null);
@@ -40,9 +42,12 @@ namespace RedisGuiManager
 
         private void button_save_Click(object sender, EventArgs e)
         {
+            try
+            {
+            if (redisClient == null || !redisClient.CanWrite()) return;
             if (radioButton_order_default.Checked)
             {
-                if (redisClient.Redis.ListLeftPush(this.key, textBox_value.Text) > 0)
+                if (database.ListLeftPush(this.key, textBox_value.Text) > 0)
                 {
                     Close();
                     return;
@@ -54,7 +59,7 @@ namespace RedisGuiManager
             }
             else
             {
-                if (redisClient.Redis.ListRightPush(this.key, textBox_value.Text) > 0)
+                if (database.ListRightPush(this.key, textBox_value.Text) > 0)
                 {
                     Close();
                     return;
@@ -63,6 +68,12 @@ namespace RedisGuiManager
                 {
                     MessageBox.Show("Save fail");
                 }
+            }
+
+            }
+            catch (Exception ex) when (ex is StackExchange.Redis.RedisException || ex is ObjectDisposedException)
+            {
+                MessageBox.Show(this, ex.Message, "Write failed; input preserved");
             }
         }
 

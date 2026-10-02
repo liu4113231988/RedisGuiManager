@@ -13,11 +13,12 @@ namespace RedisGuiManager
     public partial class HashValueInsertForm : Form
     {
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
         private string key = string.Empty;
         private string field = string.Empty;
         private string value = string.Empty;
 
-        public HashValueInsertForm(RedisClient client, string key, string field, string value)
+        public HashValueInsertForm(RedisClient client, string key, string field, string value, StackExchange.Redis.IDatabase database = null)
         {
             InitializeComponent();
 
@@ -27,6 +28,7 @@ namespace RedisGuiManager
             }
 
             this.redisClient = client;
+            this.database = database ?? client.Redis;
             this.key = key;
             this.field = field;
             this.value = value;
@@ -37,7 +39,7 @@ namespace RedisGuiManager
             textBox_server.Text = string.Format("{0} [{1}:{2}]", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port);
             textBox_key.Text = this.key;
             textBox_value.Text = this.value;
-            textBox_db_num.Text = this.redisClient.DBBlock.ToString();
+            textBox_db_num.Text = this.database.Database.ToString();
             textBox_hash_key.Text = this.field;
 
             Icon = Icon.FromHandle(Properties.Resources.Table_748.GetHicon());
@@ -46,8 +48,17 @@ namespace RedisGuiManager
 
         private void button_save_Click(object sender, EventArgs e)
         {
-            redisClient.Redis.HashSet(this.key, textBox_hash_key.Text, textBox_value.Text);
+            try
+            {
+            if (redisClient == null || !redisClient.CanWrite()) return;
+            database.HashSet(this.key, textBox_hash_key.Text, textBox_value.Text);
             Close();
+
+            }
+            catch (Exception ex) when (ex is StackExchange.Redis.RedisException || ex is ObjectDisposedException)
+            {
+                MessageBox.Show(this, ex.Message, "Write failed; input preserved");
+            }
         }
 
         private void HashValueInsertForm_Shown(object sender, EventArgs e)

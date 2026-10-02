@@ -80,6 +80,7 @@ namespace RedisGuiManager
 
         private void button_clear_Click(object sender, EventArgs e)
         {
+            if (!redisClient.CanWrite()) return;
             if (MessageBox.Show("Clear all slowlog entries?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
                 try

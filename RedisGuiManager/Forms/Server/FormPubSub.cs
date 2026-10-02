@@ -121,6 +121,7 @@ namespace RedisGuiManager
 
         private void button_publish_Click(object sender, EventArgs e)
         {
+            if (!redisClient.CanWrite()) return;
             if (subscriber == null)
             {
                 MessageBox.Show("Subscriber not available");

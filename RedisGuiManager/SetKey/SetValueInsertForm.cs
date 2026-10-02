@@ -13,9 +13,10 @@ namespace RedisGuiManager
     public partial class SetValueInsertForm : Form
     {
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
         private string key = string.Empty;
 
-        public SetValueInsertForm(RedisClient client, string key)
+        public SetValueInsertForm(RedisClient client, string key, StackExchange.Redis.IDatabase database = null)
         {
             InitializeComponent();
 
@@ -25,6 +26,7 @@ namespace RedisGuiManager
             }
 
             redisClient = client;
+            this.database = database ?? client.Redis;
             this.key = key;
         }
 
@@ -32,14 +34,17 @@ namespace RedisGuiManager
         {
             textBox_server.Text = string.Format("{0}[{1}:{2}]", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port);
             textBox_key.Text = key;
-            textBox_db_num.Text = redisClient.DBBlock.ToString();
+            textBox_db_num.Text = database.Database.ToString();
 
             Icon = Icon.FromHandle(Properties.Resources.docview_xaml_on_16x16.GetHicon());
         }
 
         private void button_save_Click(object sender, EventArgs e)
         {
-            if (redisClient.Redis.SetAdd(key, textBox_value.Text))
+            try
+            {
+            if (redisClient == null || !redisClient.CanWrite()) return;
+            if (database.SetAdd(key, textBox_value.Text))
             {
                 Close();
                 return;
@@ -47,6 +52,12 @@ namespace RedisGuiManager
             else
             {
                 MessageBox.Show($"{textBox_value.Text} is already exist");
+            }
+
+            }
+            catch (Exception ex) when (ex is StackExchange.Redis.RedisException || ex is ObjectDisposedException)
+            {
+                MessageBox.Show(this, ex.Message, "Write failed; input preserved");
             }
         }
 

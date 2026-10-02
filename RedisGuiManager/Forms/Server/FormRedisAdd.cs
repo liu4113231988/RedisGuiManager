@@ -16,6 +16,8 @@ namespace RedisGuiManager
     {
         private RedisSettings settings = null;
         private RedisSettings originalSettings;
+        private readonly TextBox usernameInput = new TextBox();
+        private readonly CheckBox readOnlyInput = new CheckBox { Text = "Read-only connection", AutoSize = true };
         public RedisSettings Settings
         {
             get { return settings; }
@@ -24,6 +26,20 @@ namespace RedisGuiManager
         public FormRedisAdd(RedisSettings redisSettings)
         {
             InitializeComponent();
+            int y = button_finish.Top;
+            MaximumSize = Size.Empty;
+            MinimumSize = Size.Empty;
+            button_finish.Top += 70;
+            button_connection_test.Top += 70;
+            Controls.Add(new Label { Text = "ACL user", AutoSize = true, Location = new Point(32, y + 3) });
+            usernameInput.SetBounds(122, y, 246, 26);
+            usernameInput.Font = textBox_name.Font;
+            usernameInput.AccessibleName = "Redis ACL username (blank uses default user)";
+            Controls.Add(usernameInput);
+            readOnlyInput.Location = new Point(122, y + 34);
+            Controls.Add(readOnlyInput);
+            ClientSize = new Size(ClientSize.Width, ClientSize.Height + 70);
+            MaximumSize = MinimumSize = Size;
 
             if (Config.darkmode > 0)
             {
@@ -48,6 +64,8 @@ namespace RedisGuiManager
         {
             Icon = Icon.FromHandle(Properties.Resources.action_add_16xLG.GetHicon());
 
+            usernameInput.Text = settings.username ?? "";
+            readOnlyInput.Checked = settings.read_only;
             textBox_name.Text = settings.name;
             textBox_ip.Text = settings.host;
             textBox_port.Text = settings.port.ToString();
@@ -130,6 +148,8 @@ namespace RedisGuiManager
                 return;
             }
 
+            settings.username = usernameInput.Text.Trim();
+            settings.read_only = readOnlyInput.Checked;
             settings.name = textBox_name.Text;
             settings.host = textBox_ip.Text;
             settings.port = int.Parse(textBox_port.Text);
@@ -166,6 +186,8 @@ namespace RedisGuiManager
                 return;
             }
 
+            settings.username = usernameInput.Text.Trim();
+            settings.read_only = readOnlyInput.Checked;
             settings.name = textBox_name.Text;
             settings.host = textBox_ip.Text;
             settings.port = int.Parse(textBox_port.Text);

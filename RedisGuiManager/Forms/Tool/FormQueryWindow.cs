@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Data.SQLite;
 using System.IO;
+using System.Threading;
 using AutocompleteMenuNS;
 
 namespace RedisGuiManager
@@ -33,11 +34,24 @@ namespace RedisGuiManager
         private int db_num;
         private bool is_querying = false;
         private bool is_stop_query = false;
+        private CancellationTokenSource queryCancellation;
+        private readonly NumericUpDown keyLimit = new NumericUpDown { Minimum = 1, Maximum = 1000000, Value = 1000, Width = 95 };
+        private readonly NumericUpDown entryLimit = new NumericUpDown { Minimum = 1, Maximum = 1000000, Value = 500, Width = 95 };
+        private readonly PageNavigator resultPages = new PageNavigator();
+        private int activeEntryLimit;
+        private int activeKeyLimit;
+        private readonly OperationReport queryReport = new OperationReport();
         private List<AutocompleteItem> list_auto_complete_static = new List<AutocompleteItem>();
 
         public FormQueryWindow()
         {
             InitializeComponent();
+            var limits = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34 };
+            limits.Controls.AddRange(new Control[] { new Label { Text = "Snapshot: max keys/DB", AutoSize = true }, keyLimit, new Label { Text = "rows/key", AutoSize = true }, entryLimit, new Label { Text = "SQL uses this subset; results capped at 10,000 rows", AutoSize = true } });
+            foreach (Control control in Controls) if (control.Dock == DockStyle.None) { control.Top += 34; if ((control.Anchor & AnchorStyles.Bottom) != 0 && control.Height > 100) control.Height -= 70; }
+            Controls.Add(limits);
+            Controls.Add(resultPages);
+            resultPages.PageChanged += RenderResultPage;
             setting_richtextbox();
 
             if (Config.darkmode > 0)
@@ -195,7 +209,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+				var keys = await FetchKeys(i);
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -224,10 +238,7 @@ namespace RedisGuiManager
                     }
                     catch (RedisServerException redis_ex)
                     {
-                        if (redis_ex.HResult != -2146233088)
-                        {
-                            // Log 출력
-                        }
+                        if (!redis_ex.Message.StartsWith("WRONGTYPE", StringComparison.OrdinalIgnoreCase)) queryReport.Errors.Add(redis_ex.Message);
 
                         if (is_stop_query)
                         {
@@ -258,7 +269,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+				var keys = await FetchKeys(i);
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -271,7 +282,7 @@ namespace RedisGuiManager
 
                     try
                     {
-                        var vals = await redis.ListRangeAsync(key);
+                        var vals = await redis.ListRangeAsync(key, 0, activeEntryLimit - 1);
                         if (is_stop_query)
                         {
                             return;
@@ -293,10 +304,7 @@ namespace RedisGuiManager
                     }
                     catch (RedisServerException redis_ex)
                     {
-                        if (redis_ex.HResult != -2146233088)
-                        {
-                            // Log 출력
-                        }
+                        if (!redis_ex.Message.StartsWith("WRONGTYPE", StringComparison.OrdinalIgnoreCase)) queryReport.Errors.Add(redis_ex.Message);
 
                         if (is_stop_query)
                         {
@@ -327,7 +335,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+				var keys = await FetchKeys(i);
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -339,7 +347,7 @@ namespace RedisGuiManager
 
                     try
                     {
-                        var vals = await redis.SetMembersAsync(key);
+                        var vals = await ReadSnapshot(redis.SetScan(key), activeEntryLimit);
                         if (is_stop_query)
                         {
                             return;
@@ -361,10 +369,7 @@ namespace RedisGuiManager
                     }
                     catch (RedisServerException redis_ex)
                     {
-                        if (redis_ex.HResult != -2146233088)
-                        {
-                            // Log 출력
-                        }
+                        if (!redis_ex.Message.StartsWith("WRONGTYPE", StringComparison.OrdinalIgnoreCase)) queryReport.Errors.Add(redis_ex.Message);
 
                         if (is_stop_query)
                         {
@@ -396,7 +401,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+				var keys = await FetchKeys(i);
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -408,7 +413,7 @@ namespace RedisGuiManager
 
                     try
                     {
-                        var vals = await redis.SortedSetRangeByRankWithScoresAsync(key);
+                        var vals = await redis.SortedSetRangeByRankWithScoresAsync(key, 0, activeEntryLimit - 1);
                         if (is_stop_query)
                         {
                             return;
@@ -431,10 +436,7 @@ namespace RedisGuiManager
                     }
                     catch (RedisServerException redis_ex)
                     {
-                        if (redis_ex.HResult != -2146233088)
-                        {
-                            // Log 출력
-                        }
+                        if (!redis_ex.Message.StartsWith("WRONGTYPE", StringComparison.OrdinalIgnoreCase)) queryReport.Errors.Add(redis_ex.Message);
 
                         if (is_stop_query)
                         {
@@ -465,7 +467,7 @@ namespace RedisGuiManager
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
 				Application.DoEvents();
 
-				var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+				var keys = await FetchKeys(i);
 
 				toolStripProgressBar_status.Value = 0;
 				toolStripProgressBar_status.Maximum = keys.Count();
@@ -478,7 +480,7 @@ namespace RedisGuiManager
 
                     try
                     {
-                        var hashes = await redis.HashGetAllAsync(key);
+                        var hashes = await ReadSnapshot(redis.HashScan(key), activeEntryLimit);
                         if (is_stop_query)
                         {
                             return;
@@ -500,10 +502,7 @@ namespace RedisGuiManager
                     }
                     catch (RedisServerException redis_ex)
                     {
-                        if (redis_ex.HResult != -2146233088)
-                        {
-                            // Log 출력
-                        }
+                        if (!redis_ex.Message.StartsWith("WRONGTYPE", StringComparison.OrdinalIgnoreCase)) queryReport.Errors.Add(redis_ex.Message);
 
                         if (is_stop_query)
                         {
@@ -545,7 +544,7 @@ namespace RedisGuiManager
                 toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
                 Application.DoEvents();
 
-                var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+                var keys = await FetchKeys(i);
 
                 toolStripProgressBar_status.Value = 0;
                 toolStripProgressBar_status.Maximum = keys.Count();
@@ -560,7 +559,7 @@ namespace RedisGuiManager
 
                     try
                     {
-                        var hashes = await redis.HashGetAllAsync(key);
+                        var hashes = await ReadSnapshot(redis.HashScan(key), activeEntryLimit);
                         if (is_stop_query)
                         {
                             return;
@@ -581,10 +580,7 @@ namespace RedisGuiManager
                     }
                     catch (RedisServerException redis_ex)
                     {
-                        if (redis_ex.HResult != -2146233088)
-                        {
-                            // Log 출력
-                        }
+                        if (!redis_ex.Message.StartsWith("WRONGTYPE", StringComparison.OrdinalIgnoreCase)) queryReport.Errors.Add(redis_ex.Message);
 
                         if (is_stop_query)
                         {
@@ -600,7 +596,7 @@ namespace RedisGuiManager
             StringBuilder sb_create_table = new StringBuilder();
             foreach (var field_name in field_name_set)
             {
-                sb_create_table.Append($",`{field_name}` TEXT DEFAULT NULL");
+                sb_create_table.Append($",`{field_name.Replace("`", "``")}` TEXT DEFAULT NULL");
             }
 
             sql_create_table = $"CREATE TABLE {table_name} (a_db INTEGER, a_key TEXT{sb_create_table.ToString()})";
@@ -617,16 +613,17 @@ namespace RedisGuiManager
             {
                 StringBuilder sb_insert_key = new StringBuilder();
                 StringBuilder sb_insert_val = new StringBuilder();
+                int fieldIndex = 0;
                 foreach (var field_n_val in row.Value)
                 {
-                    sb_insert_key.Append($",`{field_n_val.Key}`");
-                    sb_insert_val.Append($",@{field_n_val.Key}");
+                    sb_insert_key.Append($",`{field_n_val.Key.Replace("`", "``")}`");
+                    sb_insert_val.Append($",@f_{fieldIndex++}");
                 }
 
                 string sql = $"INSERT INTO {table_name} (a_db, a_key{sb_insert_key.ToString()}) VALUES (@Db, @Key{sb_insert_val.ToString()});";
                 command = new SQLiteCommand(sql, sqlite_con);
 				command.Parameters.AddWithValue("Db", row.Key.Split(' ')[0]);
-				command.Parameters.AddWithValue("Key", row.Key.Split(' ')[1]);
+				command.Parameters.AddWithValue("Key", row.Key.Substring(row.Key.IndexOf(' ') + 1));
 				foreach (var field_n_val in row.Value)
                 {
                     command.Parameters.AddWithValue(field_n_val.Key, field_n_val.Value);
@@ -673,7 +670,7 @@ namespace RedisGuiManager
                 toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
                 Application.DoEvents();
 
-                var keys = redis_client.ScanKeys(i, textBox_keys_filter.Text, Config.scan_page_count).ToArray();
+                var keys = await FetchKeys(i);
 
                 toolStripProgressBar_status.Value = 0;
                 toolStripProgressBar_status.Maximum = keys.Count();
@@ -686,7 +683,7 @@ namespace RedisGuiManager
 
                     try
                     {
-                        var entries = await redis.StreamRangeAsync(key);
+                        var entries = await redis.StreamRangeAsync(key, count: activeEntryLimit);
                         if (is_stop_query)
                         {
                             return;
@@ -744,7 +741,65 @@ namespace RedisGuiManager
             }
         }
 
-        private async Task execute_query(string select_sql)
+        private Task<T[]> ReadSnapshot<T>(IEnumerable<T> source, int limit)
+        {
+            return Task.Run(() =>
+            {
+                var rows = new List<T>();
+                foreach (var item in source)
+                {
+                    queryCancellation.Token.ThrowIfCancellationRequested();
+                    rows.Add(item);
+                    if (rows.Count == limit) break;
+                }
+                return rows.ToArray();
+            });
+        }
+
+        private Task<StackExchange.Redis.RedisKey[]> FetchKeys(int database)
+        {
+            string filter = textBox_keys_filter.Text;
+            int limit = activeKeyLimit;
+            return ReadSnapshot(redis_client.ScanKeys(database, filter, Config.scan_page_count), limit);
+        }
+
+        private void RenderResultPage()
+        {
+            if (ds == null || ds.Tables.Count == 0) return;
+            var source = ds.Tables[0];
+            var page = source.Clone();
+            foreach (DataRow row in source.Rows.Cast<DataRow>().Skip(resultPages.Offset).Take(PageNavigator.PageSize)) page.ImportRow(row);
+            dataGridView_query_result.DataSource = page;
+            resultPages.UpdatePage(source.Rows.Count > resultPages.Offset + PageNavigator.PageSize);
+            button_col_row_count.Text = $"{source.Rows.Count} result rows · page {resultPages.Offset / PageNavigator.PageSize + 1}";
+        }
+
+        private async Task execute_query(string sql)
+        {
+            if (is_querying) { is_stop_query = true; queryCancellation?.Cancel(); return; }
+            queryCancellation = new CancellationTokenSource();
+            activeEntryLimit = (int)entryLimit.Value;
+            activeKeyLimit = (int)keyLimit.Value;
+            queryReport.Errors.Clear();
+            keyLimit.Enabled = entryLimit.Enabled = comboBox_keys_type.Enabled = textBox_keys_filter.Enabled = false;
+            is_stop_query = false;
+            try { await execute_query_core(sql); }
+            catch (OperationCanceledException) { toolStripStatusLabel_status.Text = "Canceled"; }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Query failed"); }
+            finally
+            {
+                try { using var rollback = new SQLiteCommand("ROLLBACK;", sqlite_con); rollback.ExecuteNonQuery(); } catch (SQLiteException) { }
+                is_querying = false;
+                is_stop_query = false;
+                button_query_execute.Text = "▶";
+                keyLimit.Enabled = entryLimit.Enabled = comboBox_keys_type.Enabled = textBox_keys_filter.Enabled = true;
+                if (queryReport.Errors.Count > 0) queryReport.Show(this, "Query read failures");
+                queryCancellation.Dispose();
+                queryCancellation = null;
+            }
+        }
+
+        private async Task execute_query_core(string select_sql)
         {
             button_query_execute.Text = "■";
             is_querying = true;
@@ -838,11 +893,17 @@ namespace RedisGuiManager
 
                 var adapter = new SQLiteDataAdapter(select_sql, sqlite_con);
                 ds = new DataSet();
-                adapter.Fill(ds);
+                await Task.Run(() =>
+                {
+                    using var cancel = queryCancellation.Token.Register(() => adapter.SelectCommand.Cancel());
+                    adapter.Fill(ds, 0, 10000, "results");
+                });
+                queryCancellation.Token.ThrowIfCancellationRequested();
 
                 dataGridView_query_result.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
                 dataGridView_query_result.ColumnHeadersVisible = false;
-                dataGridView_query_result.DataSource = ds.Tables[0];
+                resultPages.Reset();
+                RenderResultPage();
                 dataGridView_query_result.ColumnHeadersVisible = true;
                 dataGridView_query_result.AllowUserToResizeColumns = true;
                 List<int> widths = new List<int>();
@@ -875,6 +936,7 @@ namespace RedisGuiManager
             if (is_querying)
             {
                 is_stop_query = true;
+                queryCancellation?.Cancel();
             }
             else
             {
@@ -896,6 +958,7 @@ namespace RedisGuiManager
 
         private void FormQueryWindow_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (is_querying) { is_stop_query = true; queryCancellation?.Cancel(); e.Cancel = true; return; }
             string sql = $"DROP TABLE IF EXISTS {table_name};";
             SQLiteCommand command = new SQLiteCommand(sql, sqlite_con);
             int result = command.ExecuteNonQuery();

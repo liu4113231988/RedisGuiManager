@@ -34,6 +34,7 @@ namespace RedisGuiManager
 
             contextMenuStrip_redis.Items.Remove(remove_keys_from_registered_dbs_ToolStripMenuItem);
 
+            treeView_server.BeforeSelect += (s, e) => { e.Cancel = !ValueControl.ConfirmAll(panel1); };
             Config.Load();
 
             if (Config.darkmode > 0)
@@ -63,6 +64,7 @@ namespace RedisGuiManager
 
         private void ClearAll()
         {
+            foreach (TreeNode server in treeView_server.Nodes) DisposeKeyScans(server);
             // 关闭已建立的连接：包含分组内的连接与独立连接，避免 TreeView 仅含顶层节点导致泄漏
             foreach (var g in redis_group)
             {
@@ -212,7 +214,7 @@ namespace RedisGuiManager
                     if (group.connections == null) group.connections = new List<RedisSettings>();
                     foreach (var settings in group.connections)
                     {
-                        settings.redis_client = new RedisClient(settings);
+                        settings.redis_client = ObserveClient(new RedisClient(settings));
                         if (!_settingFileMap.ContainsKey(settings))
                         {
                             // nested settings inherit group's file
@@ -223,7 +225,7 @@ namespace RedisGuiManager
 
                 foreach (var settings in redis_settings)
                 {
-                    settings.redis_client = new RedisClient(settings);
+                    settings.redis_client = ObserveClient(new RedisClient(settings));
                 }
 
                 // ensure default file is known for new adds
@@ -273,7 +275,7 @@ namespace RedisGuiManager
             {
                 foreach (var settings in group.connections)
                 {
-                    settings.redis_client = new RedisClient(settings);
+                    settings.redis_client = ObserveClient(new RedisClient(settings));
                     if (!_settingFileMap.ContainsKey(settings))
                         _settingFileMap[settings] = _groupFileMap[group];
                 }
@@ -281,7 +283,7 @@ namespace RedisGuiManager
 
             foreach (var settings in redis_settings)
             {
-                settings.redis_client = new RedisClient(settings);
+                settings.redis_client = ObserveClient(new RedisClient(settings));
             }
 
             LoadRedisSettings();
@@ -341,6 +343,7 @@ namespace RedisGuiManager
 
         private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (!ValueControl.ConfirmAll(panel1)) { e.Cancel = true; return; }
             Config.mainform_is_maximized = (WindowState == FormWindowState.Maximized) ? 1 : 0;
 
             if (WindowState == FormWindowState.Normal)
@@ -599,116 +602,74 @@ namespace RedisGuiManager
 
         private void remove_keys_from_registered_dbs_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			TreeNode select = treeView_server.SelectedNode;
-			if (select == null)
-			{
-				return;
-			}
-
-			if (select.Tag is RedisClient client)
-			{
-				if (client.RedisServer == null)
-				{
-					OperateResult connect = client.Connect();
-					if (connect.IsSuccess == false)
-					{
-						MessageBox.Show("Connection failed");
-						return;
-					}
-				}
-
-				using (FormInputString formInput = new FormInputString())
-				{
-					formInput.TextInfo = "Delete keys from DBs";
-					formInput.InputValue = "";
-
-					if (formInput.ShowDialog() == DialogResult.OK &&
-                        formInput.InputValue != "")
-					{
-                        List<int> db_nums = new List<int>();
-
-						for (int i = 0; i < 16; ++i)
-						{
-                            db_nums.Add(i);
-						}
-
-                        if (client.Settings.additional_dbs != null)
-                        {
-                            foreach (int i in client.Settings.additional_dbs)
-                            {
-                                db_nums.Add(i);
-                            }
-                        }
-
-                        int deleted_count = 0;
-                        foreach (int db_num in db_nums)
-						{
-                            var reads = client.ScanKeys(db_num, formInput.InputValue, Config.scan_page_count);
-                            var database = client.GetDB(db_num);
-
-							foreach (var key in reads)
-							{
-								database.KeyDelete(key.ToString());
-                                ++deleted_count;
-                            }
-						}
-
-                        RefreshRedisKey(select, true);
-
-                        MessageBox.Show($"Delete keys complete.\r\n\r\nserver : {$"{select.Text} ({client.Settings.host}:{client.Settings.port})"}\r\npattern : {formInput.InputValue}\r\ndeleted count : {deleted_count}");
-					}
-				}
-			}
-		}
+            if (!CanWriteSelected()) return;
+            PromptBatchDelete(false);
+        }
 
         private void remove_keys_from_whole_dbs_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			TreeNode select = treeView_server.SelectedNode;
-			if (select == null)
-			{
-				return;
-			}
+            if (!CanWriteSelected()) return;
+            PromptBatchDelete(true);
+        }
 
-			if (select.Tag is RedisClient client)
-			{
-                if (client.RedisServer == null)
-				{
-					OperateResult connect = client.Connect();
-					if (connect.IsSuccess == false)
-					{
-						MessageBox.Show("Connection failed");
-						return;
-					}
-				}
+        private void PromptBatchDelete(bool allDatabases)
+        {
+            var selected = treeView_server.SelectedNode;
+            var client = (RedisClient)GetRedisNode(selected).Tag;
+            using var input = new FormInputString { TextInfo = "Delete keys matching pattern", InputValue = "" };
+            if (input.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(input.InputValue)) return;
+            var databases = selected.Tag is DbSettings db && !allDatabases
+                ? new[] { db.DBNumber }
+                : allDatabases ? Enumerable.Range(0, client.Settings.use_cluster ? 1 : client.RedisServer.DatabaseCount).ToArray()
+                : selected.Nodes.Cast<TreeNode>().Where(n => n.Tag is DbSettings).Select(n => ((DbSettings)n.Tag).DBNumber).ToArray();
+            RunBatch(client, databases, input.InputValue, "Delete keys", "", (database, key) => database.KeyDelete(key));
+            if (selected.Tag is DbSettings) RefreshDbKeys(selected, true);
+        }
 
-				using (FormInputString formInput = new FormInputString())
-				{
-					formInput.TextInfo = "Delete keys from DBs";
-					formInput.InputValue = "";
-
-					if (formInput.ShowDialog() == DialogResult.OK &&
-						formInput.InputValue != "")
-					{
-						int deleted_count = 0;
-						for (int db_num = 0; db_num < (client.Settings.use_cluster ? 1 : client.RedisServer.DatabaseCount); ++db_num)
-						{
-							var reads = client.ScanKeys(db_num, formInput.InputValue, Config.scan_page_count);
-							var database = client.GetDB(db_num);
-
-							foreach (var key in reads)
-							{
-								database.KeyDelete(key.ToString());
-								++deleted_count;
-							}
-						}
-
-						RefreshRedisKey(select, true);
-
-						MessageBox.Show($"Delete keys complete.\r\n\r\nserver : {$"{select.Text} ({client.Settings.host}:{client.Settings.port})"}\r\ndb range : 0 ~ {client.RedisServer.DatabaseCount - 1}\r\npattern : {formInput.InputValue}\r\ndeleted count : {deleted_count}");
-					}
-				}
-			}
-		}
+        private void RunBatch(RedisClient client, int[] databases, string pattern, string title, string destination, Func<IDatabase, StackExchange.Redis.RedisKey, bool> execute)
+        {
+            if (!client.CanWrite()) return;
+            string manifest = Path.GetTempFileName();
+            try
+            {
+                if (!OperationDialog.TryRun(this, "Preview " + title, (token, progress) =>
+                {
+                    long count = 0;
+                    var sample = new List<string>();
+                    using var writer = new StreamWriter(manifest);
+                    foreach (int db in databases.Distinct())
+                    {
+                        foreach (var key in client.ScanKeys(db, pattern, Config.scan_page_count))
+                        {
+                            token.ThrowIfCancellationRequested();
+                            writer.WriteLine(JsonConvert.SerializeObject(new object[] { db, Convert.ToBase64String((byte[])key) }));
+                            if (sample.Count < 10) sample.Add($"DB {db}: {key}");
+                            if (++count % 100 == 0) progress.Report($"Matched {count} keys");
+                        }
+                    }
+                    return (Count: count, Sample: sample);
+                }, out var preview)) return;
+                if (preview.Count == 0) { MessageBox.Show(this, "No keys matched.", title); return; }
+                if (MessageBox.Show(this, $"Connection: {client.Settings.name} [{client.Settings.host}:{client.Settings.port}]\nDBs: {string.Join(", ", databases)}\nPattern: {pattern}\nMatched keys: {preview.Count}\n{destination}\n\n{string.Join("\n", preview.Sample)}\n\nContinue? Completed changes remain if canceled.", title + " preview", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                if (!OperationDialog.TryRun(this, title, (token, progress) =>
+                {
+                    var report = new OperationReport();
+                    foreach (string line in File.ReadLines(manifest))
+                    {
+                        if (token.IsCancellationRequested) { report.Canceled = true; break; }
+                        var item = JArray.Parse(line);
+                        int db = item[0].Value<int>();
+                        var key = (StackExchange.Redis.RedisKey)Convert.FromBase64String(item[1].Value<string>());
+                        try { if (execute(client.GetDB(db), key)) report.Success++; else report.Skipped++; }
+                        catch (RedisException ex) { report.Errors.Add($"DB {db} / {key}: {ex.Message}"); }
+                        if ((report.Success + report.Skipped + report.Errors.Count) % 100 == 0) progress.Report($"Processed {report.Success + report.Skipped + report.Errors.Count} / {preview.Count}");
+                    }
+                    return report;
+                }, out var result)) return;
+                result.Show(this, title + " result");
+            }
+            finally { File.Delete(manifest); }
+        }
 
         private void reload_server_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -736,7 +697,7 @@ namespace RedisGuiManager
             {
 				if (client.RedisServer == null)
 				{
-					OperateResult connect = client.Connect();
+					if (!OperationDialog.TryRun(this, "Connect", (token, progress) => client.Connect(), out var connect)) return;
 					if (connect.IsSuccess == false)
 					{
 						MessageBox.Show("Connection failed");
@@ -802,252 +763,187 @@ namespace RedisGuiManager
             }
         }
 
+        private bool CanWriteSelected()
+        {
+            var node = treeView_server.SelectedNode;
+            var client = node == null ? null : GetRedisNode(node)?.Tag as RedisClient;
+            return client != null && client.CanWrite();
+        }
+
         private void export_data_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            TreeNode select = treeView_server.SelectedNode;
-            if (select == null) return;
-
-            TreeNode dbNode = GetDbNode(select);
-            TreeNode redisNode = GetRedisNode(select);
-
-            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            var selected = treeView_server.SelectedNode;
+            if (selected == null || GetDbNode(selected)?.Tag is not DbSettings dbSettings) return;
+            var client = (RedisClient)GetRedisNode(selected).Tag;
+            var database = client.GetDB(dbSettings.DBNumber);
+            using var dialog = new SaveFileDialog { Filter = "JSON files (*.json)|*.json", FileName = $"redis_export_db{dbSettings.DBNumber}.json" };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            string path = dialog.FileName;
+            if (!OperationDialog.TryRun(this, "Export data", (token, progress) =>
             {
-                using SaveFileDialog sfd = new SaveFileDialog();
-                sfd.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
-                sfd.FileName = $"redis_export_db{dbSettings.DBNumber}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-
-                if (sfd.ShowDialog() != DialogResult.OK) return;
-
+                var report = new OperationReport();
+                string temporary = path + ".partial-" + Guid.NewGuid().ToString("N");
                 try
                 {
-                    var database = redisClient.GetDB(dbSettings.DBNumber);
-                    var keys = redisClient.ScanKeys(dbSettings.DBNumber, "*", Config.scan_page_count);
-
-                    var exportData = new List<object>();
-                    int exportErrors = 0;
-                    int count = 0;
-
-                    foreach (var key in keys)
+                    using (var writer = new JsonTextWriter(new StreamWriter(temporary)) { Formatting = Formatting.Indented })
                     {
-                        var keyType = database.KeyType(key);
-                        var entry = new System.Collections.Generic.Dictionary<string, object>
+                        var serializer = new JsonSerializer();
+                        writer.WriteStartArray();
+                        foreach (var key in client.ScanKeys(dbSettings.DBNumber, "*", Config.scan_page_count))
                         {
-                            ["key"] = key.ToString(),
-                            ["type"] = keyType.ToString()
-                        };
-
-                        try
-                        {
-                            var snapshot = (RedisResult[])database.ScriptEvaluate(
-                                "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
-                                new StackExchange.Redis.RedisKey[] { key });
-                            entry["dump"] = Convert.ToBase64String((byte[])snapshot[0]);
-                            entry["pttl"] = (long)snapshot[1];
-                            switch (keyType)
+                            if (token.IsCancellationRequested) { report.Canceled = true; break; }
+                            try
                             {
-                                case RedisType.String:
-                                    entry["value"] = database.StringGet(key).ToString();
-                                    break;
-                                case RedisType.Hash:
-                                    var hashEntries = database.HashGetAll(key);
-                                    entry["value"] = hashEntries.Select(h => new { field = h.Name.ToString(), value = h.Value.ToString() }).ToList();
-                                    break;
-                                case RedisType.List:
-                                    entry["value"] = database.ListRange(key).Select(v => v.ToString()).ToList();
-                                    break;
-                                case RedisType.Set:
-                                    entry["value"] = database.SetMembers(key).Select(v => v.ToString()).ToList();
-                                    break;
-                                case RedisType.SortedSet:
-                                    var sortedEntries = database.SortedSetRangeByRankWithScores(key);
-                                    entry["value"] = sortedEntries.Select(s => new { member = s.Element.ToString(), score = s.Score }).ToList();
-                                    break;
-                                case RedisType.Stream:
-                                    var streamEntries = database.StreamRange(key);
-                                    entry["value"] = streamEntries.Select(s => new { id = s.Id.ToString(), fields = s.Values.Select(v => new { name = v.Name.ToString(), value = v.Value.ToString() }).ToList() }).ToList();
-                                    break;
-                                default:
-                                    entry["value"] = null;
-                                    break;
+                                var snapshot = (RedisResult[])database.ScriptEvaluate(
+                                    "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
+                                    new StackExchange.Redis.RedisKey[] { key });
+                                serializer.Serialize(writer, new Dictionary<string, object> { ["key"] = key.ToString(), ["keyBytes"] = Convert.ToBase64String((byte[])key), ["dump"] = Convert.ToBase64String((byte[])snapshot[0]), ["pttl"] = (long)snapshot[1] });
+                                report.Success++;
                             }
-
-                            var ttl = database.KeyTimeToLive(key);
-                            entry["ttl"] = ttl.HasValue ? (long?)ttl.Value.TotalSeconds : null;
+                            catch (RedisException ex) { report.Errors.Add($"{key}: {ex.Message}"); }
+                            if ((report.Success + report.Errors.Count) % 100 == 0) progress.Report($"Exported {report.Success} keys; failed {report.Errors.Count}");
                         }
-                        catch (Exception ex)
-                        {
-                            entry["error"] = ex.Message;
-                            exportErrors++;
-                        }
-
-                        exportData.Add(entry);
-                        count++;
-
-                        if (count % 100 == 0)
-                        {
-                            toolStripStatusLabel1.Text = $"Exporting... {count} keys";
-                            Application.DoEvents();
-                        }
+                        writer.WriteEndArray();
                     }
-
-                    string json = JsonConvert.SerializeObject(exportData, Formatting.Indented);
-                    System.IO.File.WriteAllText(sfd.FileName, json);
-
-                    MessageBox.Show($"Export completed!\r\n\r\nKeys: {count}\r\nFailed entries: {exportErrors}\r\nFile: {sfd.FileName}", "Export Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    toolStripStatusLabel1.Text = $"Exported {count} keys";
+                    if (report.Canceled && report.Success == 0) return report;
+                    if (File.Exists(path)) File.Replace(temporary, path, path + ".bak");
+                    else File.Move(temporary, path);
+                    return report;
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Export failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            }, out var result)) return;
+            result.Show(this, result.Canceled ? (result.Success > 0 ? "Partial export saved" : "Export canceled; file unchanged") : "Export result");
         }
 
         private void import_data_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            TreeNode select = treeView_server.SelectedNode;
-            if (select == null) return;
-
-            TreeNode dbNode = GetDbNode(select);
-            TreeNode redisNode = GetRedisNode(select);
-
-            if (redisNode.Tag is RedisClient redisClient && dbNode.Tag is DbSettings dbSettings)
+            if (!CanWriteSelected()) return;
+            var selected = treeView_server.SelectedNode;
+            if (selected == null || GetDbNode(selected)?.Tag is not DbSettings dbSettings) return;
+            var client = (RedisClient)GetRedisNode(selected).Tag;
+            var database = client.GetDB(dbSettings.DBNumber);
+            using var dialog = new OpenFileDialog { Filter = "JSON files (*.json)|*.json" };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            string path = dialog.FileName;
+            if (MessageBox.Show(this, $"Import {Path.GetFileName(path)} to {client.Settings.name} [{client.Settings.host}:{client.Settings.port}], DB {dbSettings.DBNumber}?\nExisting keys will be skipped. Completed imports remain if canceled.", "Confirm import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (!OperationDialog.TryRun(this, "Import data", (token, progress) =>
             {
-                using OpenFileDialog ofd = new OpenFileDialog();
-                ofd.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
-
-                if (ofd.ShowDialog() != DialogResult.OK) return;
-
+                var report = new OperationReport();
+                using var reader = new JsonTextReader(new StreamReader(path));
+                var serializer = new JsonSerializer();
+                if (!reader.Read() || reader.TokenType != JsonToken.StartArray) throw new InvalidDataException("Expected a JSON array");
+                int index = 0;
                 try
                 {
-                    string json = System.IO.File.ReadAllText(ofd.FileName);
-                    var importData = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(json);
-
-                    if (importData == null || importData.Count == 0)
-                    {
-                        MessageBox.Show("No data to import", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
-
-                    if (MessageBox.Show($"Import {importData.Count} keys to DB {dbSettings.DBNumber}? Existing keys will be skipped.", "Confirm Import", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-                        return;
-
-                    var database = redisClient.GetDB(dbSettings.DBNumber);
-                    int success = 0, fail = 0, skipped = 0;
-                    var errors = new List<string>();
-
-                    for (int i = 0; i < importData.Count; i++)
-                    {
-                        var entry = importData[i];
-                        string key = entry != null && entry.TryGetValue("key", out var keyObj) ? keyObj?.ToString() : null;
-                        string type = entry != null && entry.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : null;
-
-                        if (string.IsNullOrEmpty(key)) { fail++; errors.Add($"Entry {i + 1}: missing key"); continue; }
-
-                        try
-                        {
-                            if (entry.ContainsKey("error")) throw new InvalidDataException("Export entry contains an error");
-                            if (database.KeyExists(key)) { skipped++; continue; }
-                            if (entry.TryGetValue("dump", out var dump))
-                            {
-                                byte[] payload = Convert.FromBase64String(dump.ToString());
-                                long ttl = Convert.ToInt64(entry["pttl"]);
-                                if (ttl < -1) throw new InvalidDataException("Invalid TTL");
-                                if (ttl == 0) { skipped++; continue; }
-                                database.Execute("RESTORE", key, ttl < 0 ? 0 : ttl, payload);
-                                success++;
-                                continue;
-                            }
-                            var value = JToken.FromObject(entry["value"] ?? throw new InvalidDataException("Missing value"));
-                            var commands = new List<string[]>();
-                            switch (type)
-                            {
-                                case "String":
-                                    if (value.Type != JTokenType.String) throw new InvalidDataException("Expected text value");
-                                    commands.Add(new[] { "SET", key, value.ToString() });
-                                    break;
-                                case "Hash":
-                                    foreach (var item in (JArray)value)
-                                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException("Missing field"), item["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value") });
-                                    break;
-                                case "List":
-                                case "Set":
-                                    foreach (var item in (JArray)value)
-                                    {
-                                        if (item.Type != JTokenType.String) throw new InvalidDataException("Expected text member");
-                                        commands.Add(new[] { type == "List" ? "RPUSH" : "SADD", key, item.ToString() });
-                                    }
-                                    break;
-                                case "SortedSet":
-                                    foreach (var item in (JArray)value)
-                                    {
-                                        double score = item["score"].Value<double>();
-                                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException("Invalid score");
-                                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException("Missing member") });
-                                    }
-                                    break;
-                                case "Stream":
-                                    ulong previousMs = 0, previousSeq = 0;
-                                    foreach (var item in (JArray)value)
-                                    {
-                                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException("Missing stream ID");
-                                        var parts = id.Split('-');
-                                        if (parts.Length != 2 || !ulong.TryParse(parts[0], out ulong ms) || !ulong.TryParse(parts[1], out ulong seq) || ms < previousMs || (ms == previousMs && seq <= previousSeq))
-                                            throw new InvalidDataException("Stream IDs must be valid and increasing");
-                                        previousMs = ms; previousSeq = seq;
-                                        var command = new List<string> { "XADD", key, id };
-                                        foreach (var field in (JArray)item["fields"])
-                                        {
-                                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException("Missing field"));
-                                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value"));
-                                        }
-                                        if (command.Count == 3) throw new InvalidDataException("Stream entry has no fields");
-                                        commands.Add(command.ToArray());
-                                    }
-                                    break;
-                                default: throw new InvalidDataException("Unsupported type: " + type);
-                            }
-                            if (commands.Count == 0) throw new InvalidDataException("Empty collection cannot be restored");
-                            long legacyTtl = -1;
-                            if (entry.TryGetValue("ttl", out var ttlObj) && ttlObj != null)
-                            {
-                                legacyTtl = Convert.ToInt64(ttlObj);
-                                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException("Invalid TTL");
-                                if (legacyTtl == 0) { skipped++; continue; }
-                            }
-                            var imported = (long)database.ScriptEvaluate(
-                                "if redis.call('EXISTS',KEYS[1]) == 1 then return 0 end; local commands=cjson.decode(ARGV[1]); for _,cmd in ipairs(commands) do redis.call(unpack(cmd)) end; if tonumber(ARGV[2]) > 0 then redis.call('PEXPIRE',KEYS[1],ARGV[2]) end; return 1",
-                                new StackExchange.Redis.RedisKey[] { key },
-                                new RedisValue[] { JsonConvert.SerializeObject(commands), legacyTtl < 0 ? -1 : legacyTtl * 1000 });
-                            if (imported == 0) { skipped++; continue; }
-
-                            success++;
-                        }
-                        catch (Exception ex)
-                        {
-                            errors.Add($"Entry {i + 1} ({key}): {ex.Message}");
-                            fail++;
-                        }
-
-                        if ((i + 1) % 100 == 0)
-                        {
-                            toolStripStatusLabel1.Text = $"Importing... {i + 1}/{importData.Count}";
-                            Application.DoEvents();
-                        }
-                    }
-
-                    MessageBox.Show($"Import completed!\r\n\r\nSuccess: {success}\r\nFailed: {fail}\r\nSkipped (existing/expired): {skipped}\r\n" + string.Join("\r\n", errors.Take(10)), "Import Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    toolStripStatusLabel1.Text = $"Imported {success} keys";
-                }
-                catch (Exception ex)
+                while (reader.Read() && reader.TokenType != JsonToken.EndArray)
                 {
-                    MessageBox.Show("Import failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (token.IsCancellationRequested) { report.Canceled = true; break; }
+                    index++;
+                    // Parse a complete entry before writing; malformed JSON ends the file with a partial-result report.
+                    Dictionary<string, object> entry;
+                    try { entry = serializer.Deserialize<Dictionary<string, object>>(reader); }
+                    catch (JsonException ex) { report.Errors.Add($"Entry {index}: {ex.Message}"); break; }
+                    try { if (ImportEntry(database, entry)) report.Success++; else report.Skipped++; }
+                    catch (Exception ex) { report.Errors.Add($"Entry {index} ({(entry != null && entry.TryGetValue("key", out var key) ? key : "unknown")}): {ex.Message}"); }
+                    if (index % 100 == 0) progress.Report($"Processed {index}: imported {report.Success}, skipped {report.Skipped}, failed {report.Errors.Count}");
                 }
+                    if (!report.Canceled && reader.TokenType != JsonToken.EndArray) report.Errors.Add("Unexpected end of JSON file; only completed entries were imported");
+                }
+                catch (JsonException ex) { report.Errors.Add("Invalid JSON: " + ex.Message); }
+                return report;
+            }, out var result)) return;
+            result.Show(this, "Import result");
+            RefreshDbKeys(GetDbNode(selected), true);
+        }
+
+        private static bool ImportEntry(IDatabase database, Dictionary<string, object> entry)
+        {
+            string key = entry != null && entry.TryGetValue("key", out var keyObj) ? keyObj?.ToString() : null;
+            string type = entry != null && entry.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : null;
+            if (key == null) throw new InvalidDataException("Missing key");
+            if (entry.ContainsKey("error")) throw new InvalidDataException("Export entry contains an error");
+            if (entry.TryGetValue("dump", out var dump))
+            {
+                byte[] payload = Convert.FromBase64String(dump.ToString());
+                long ttl = Convert.ToInt64(entry["pttl"]);
+                if (ttl < -1) throw new InvalidDataException("Invalid TTL");
+                if (ttl == 0) return false;
+                var restoreKey = entry.TryGetValue("keyBytes", out var encodedKey)
+                    ? (StackExchange.Redis.RedisKey)Convert.FromBase64String(encodedKey.ToString()) : (StackExchange.Redis.RedisKey)key;
+                if (database.KeyExists(restoreKey)) return false;
+                database.KeyRestore(restoreKey, payload, ttl < 0 ? null : TimeSpan.FromMilliseconds(ttl));
+                return true;
             }
+            if (database.KeyExists(key)) return false;
+            var value = JToken.FromObject(entry["value"] ?? throw new InvalidDataException("Missing value"));
+            var commands = new List<string[]>();
+            switch (type)
+            {
+                case "String":
+                    if (value.Type != JTokenType.String) throw new InvalidDataException("Expected text value");
+                    commands.Add(new[] { "SET", key, value.ToString() });
+                    break;
+                case "Hash":
+                    foreach (var item in (JArray)value)
+                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException("Missing field"), item["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value") });
+                    break;
+                case "List":
+                case "Set":
+                    foreach (var item in (JArray)value)
+                    {
+                        if (item.Type != JTokenType.String) throw new InvalidDataException("Expected text member");
+                        commands.Add(new[] { type == "List" ? "RPUSH" : "SADD", key, item.ToString() });
+                    }
+                    break;
+                case "SortedSet":
+                    foreach (var item in (JArray)value)
+                    {
+                        double score = item["score"].Value<double>();
+                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException("Invalid score");
+                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException("Missing member") });
+                    }
+                    break;
+                case "Stream":
+                    ulong previousMs = 0, previousSeq = 0;
+                    foreach (var item in (JArray)value)
+                    {
+                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException("Missing stream ID");
+                        var parts = id.Split('-');
+                        if (parts.Length != 2 || !ulong.TryParse(parts[0], out ulong ms) || !ulong.TryParse(parts[1], out ulong seq) || ms < previousMs || (ms == previousMs && seq <= previousSeq))
+                            throw new InvalidDataException("Stream IDs must be valid and increasing");
+                        previousMs = ms; previousSeq = seq;
+                        var command = new List<string> { "XADD", key, id };
+                        foreach (var field in (JArray)item["fields"])
+                        {
+                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException("Missing field"));
+                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value"));
+                        }
+                        if (command.Count == 3) throw new InvalidDataException("Stream entry has no fields");
+                        commands.Add(command.ToArray());
+                    }
+                    break;
+                default: throw new InvalidDataException("Unsupported type: " + type);
+            }
+            if (commands.Count == 0) throw new InvalidDataException("Empty collection cannot be restored");
+            long legacyTtl = -1;
+            if (entry.TryGetValue("ttl", out var ttlObj) && ttlObj != null)
+            {
+                legacyTtl = Convert.ToInt64(ttlObj);
+                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException("Invalid TTL");
+                if (legacyTtl == 0) return false;
+            }
+            var imported = (long)database.ScriptEvaluate(
+                "if redis.call('EXISTS',KEYS[1]) == 1 then return 0 end; local commands=cjson.decode(ARGV[1]); for _,cmd in ipairs(commands) do redis.call(unpack(cmd)) end; if tonumber(ARGV[2]) > 0 then redis.call('PEXPIRE',KEYS[1],ARGV[2]) end; return 1",
+                new StackExchange.Redis.RedisKey[] { key },
+                new RedisValue[] { JsonConvert.SerializeObject(commands), legacyTtl < 0 ? -1 : legacyTtl * 1000 });
+            if (imported == 0) return false;
+
+            return true;
         }
 
         private void edit_connection_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!ValueControl.ConfirmAll(panel1)) return;
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
             {
@@ -1078,6 +974,7 @@ namespace RedisGuiManager
 
         private void disconnect_connection_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!ValueControl.ConfirmAll(panel1)) return;
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
             {
@@ -1092,12 +989,14 @@ namespace RedisGuiManager
                 }
 
                 client.Redis = null;
+                DisposeKeyScans(select);
                 select.Nodes.Clear();
             }
         }
 
         private void delete_connection_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!ValueControl.ConfirmAll(panel1)) return;
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
             {
@@ -1121,6 +1020,7 @@ namespace RedisGuiManager
 
         private void new_key_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!CanWriteSelected()) return;
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
             {
@@ -1178,7 +1078,7 @@ namespace RedisGuiManager
                     if (formInput.ShowDialog() == DialogResult.OK)
                     {
                         dbSettings.Filter = formInput.InputValue == "" ? "*" : formInput.InputValue;
-                        FilterKeys(select);
+                        RefreshDbKeys(select, true);
                         select.ExpandAll();
                     }
                 }
@@ -1196,46 +1096,15 @@ namespace RedisGuiManager
             if (select.Tag is DbSettings dbSettings)
             {
                 dbSettings.Filter = "*";
-                FilterKeys(select);
+                RefreshDbKeys(select, true);
                 select.ExpandAll();
             }
         }
 
         private void remove_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			TreeNode select = treeView_server.SelectedNode;
-			if (select == null)
-			{
-				return;
-			}
-
-            if (select.Tag is DbSettings dbSettings)
-			{
-				using (FormInputString formInput = new FormInputString())
-				{
-					formInput.TextInfo = "Delete keys";
-					formInput.InputValue = "";
-
-					if (formInput.ShowDialog() == DialogResult.OK &&
-                        formInput.InputValue != "")
-					{
-                        RedisClient redisClient = select.Parent.Tag as RedisClient;
-                        var reads = redisClient.ScanKeys(dbSettings.DBNumber, formInput.InputValue, Config.scan_page_count);
-                        var database = redisClient.GetDB(dbSettings.DBNumber);
-
-                        int deleted_count = 0;
-                        foreach (var key in reads)
-						{
-                            database.KeyDelete(key.ToString());
-                            ++deleted_count;
-						}
-
-                        RefreshDbKeys(select, true);
-
-                        MessageBox.Show($"Delete keys complete.\r\n\r\nserver : {$"{select.Parent.Text} ({redisClient.Settings.host}:{redisClient.Settings.port})"}\r\ndb num : {dbSettings.DBNumber}\r\npattern : {formInput.InputValue}\r\ndeleted count : {deleted_count}");
-                    }
-				}
-			}
+            if (!CanWriteSelected()) return;
+            PromptBatchDelete(false);
         }
 
         private void remove_db_ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1365,6 +1234,7 @@ namespace RedisGuiManager
             // Tag 可能为 null（新创建的临时节点），直接返回
             if (select.Tag == null) return;
 
+            if (select.Tag is Action loadMore) { loadMore(); return; }
             if (select.Tag is RedisGroup)
             {
                 return;
@@ -1376,12 +1246,16 @@ namespace RedisGuiManager
             treeView_server.Invalidate(true);
             Application.DoEvents();
 
+            try
+            {
             if (select.Tag is RedisClient)
             {
+                CreateRedisShowTagControl<StartControl>();
                 RefreshRedisKey(select);
             }
             else if (select.Tag is DbSettings)
             {
+                CreateRedisShowTagControl<StartControl>();
                 RefreshDbKeys(select, false);
             }
             else if (select.Tag is RedisFolder)
@@ -1414,6 +1288,7 @@ namespace RedisGuiManager
                                 redisClient.DBBlock = dbSettings.DBNumber;
                             }
 
+                            toolStripStatusLabel1.Text = $"{redisClient.Settings.name} · DB {dbSettings.DBNumber} · {(redisClient.IsConnected ? "Connected" : "Disconnected")} {(redisClient.Settings.read_only ? "· read-only" : "")}";
                             var type = redisClient.Redis.KeyType(select.Text);
                             switch (type)
                             {
@@ -1465,8 +1340,16 @@ namespace RedisGuiManager
                 }
             }
 
-            select.ImageKey = old_imagekey;
-            select.SelectedImageKey = old_imagekey;
+            }
+            catch (RedisException ex)
+            {
+                MessageBox.Show(this, ex.Message + "\nReload the connection to retry.", "Redis request failed");
+            }
+            finally
+            {
+                select.ImageKey = old_imagekey;
+                select.SelectedImageKey = old_imagekey;
+            }
         }
 
         private TreeNode GetRedisNode(TreeNode treeNode)
@@ -1534,7 +1417,7 @@ namespace RedisGuiManager
             {
                 select.Nodes.Clear();
 
-                var filter_list_keys = dbSettings.Keys.ToList();
+                var filter_list_keys = (dbSettings.Keys ?? new List<string>()).ToList();
 
                 if (dbSettings.Filter != "" &&
                     dbSettings.Filter != "*")
@@ -1548,6 +1431,8 @@ namespace RedisGuiManager
                 }
 
                 BuildTreeNode_DB(select, filter_list_keys);
+                if (dbSettings.HasMoreKeys)
+                    select.Nodes.Add(new TreeNode("Load next 500 keys…") { Tag = (Action)(() => LoadDbKeyPage(select)) });
             }
         }
 
@@ -1558,12 +1443,16 @@ namespace RedisGuiManager
             {
                 if (reload)
                 {
+                    if (!ValueControl.ConfirmAll(panel1)) return;
+                    CreateRedisShowTagControl<StartControl>();
+                    DisposeKeyScans(select);
                     select.Nodes.Clear();
                 }
 
+                if (reload && !redisClient.IsConnected) redisClient.Close();
                 if (redisClient.Redis == null)
                 {
-                    OperateResult connect = redisClient.Connect();
+                    if (!OperationDialog.TryRun(this, "Connect", (token, progress) => redisClient.Connect(), out var connect)) return;
                     if (connect.IsSuccess == false)
                     {
                         MessageBox.Show(string.Format("Failed to connect to redis[{0}] IpAddress:{1} Port:{2}\r\n", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port) + connect.Message);
@@ -1607,76 +1496,54 @@ namespace RedisGuiManager
             }
         }
 
+        private void DisposeKeyScans(TreeNode node)
+        {
+            if (node.Tag is DbSettings db) db.KeyScan?.Dispose();
+            foreach (TreeNode child in node.Nodes) DisposeKeyScans(child);
+        }
+
         private void RefreshDbKeys(TreeNode select, bool reload = false)
         {
-            if (select.Tag is DbSettings dbSettings)
+            if (select.Tag is not DbSettings db) return;
+            if (!ValueControl.ConfirmAll(panel1)) return;
+            if (reload || db.KeyScan == null && db.Keys == null)
             {
-                RedisClient redisClient = select.Parent.Tag as RedisClient;
-                int dbBlock = dbSettings.DBNumber;
-
-                if (redisClient == null)
-                {
-                    MessageBox.Show("Invalid redis setting");
-
-                    return;
-                }
-
-                if (redisClient.Redis == null)
-                {
-                    MessageBox.Show("Redis connection is gone");
-
-                    return;
-                }
-
-                if (reload)
-                {
-                    select.Nodes.Clear();
-                }
-
-                if (select.Nodes.Count == 0)
-                {
-                    int dbBlockOld = redisClient.DBBlock;
-
-                    if (redisClient.DBBlock != dbBlock)
-                    {
-                        OperateResult selectDb = redisClient.SelectDB(dbBlock);
-                        if (selectDb.IsSuccess == false)
-                        {
-                            MessageBox.Show(string.Format("Select [{0}] DB {1} fail", redisClient.Settings.name, dbBlock));
-                            return;
-                        }
-
-                        redisClient.DBBlock = dbBlock;
-                    }
-
-                    var reads = redisClient.ScanKeys(dbBlock, "*", Config.scan_page_count).ToArray();
-                    int keyCount = reads.Count();
-
-                    List<string> list_keys = new List<string>();
-                    foreach (var item in reads)
-                    {
-                        list_keys.Add(item.ToString());
-                    }
-
-                    dbSettings.Keys = list_keys;
-                    select.Text = string.Format("db{0} ({1})", dbBlock, keyCount);
-
-                    BuildTreeNode_DB(select, list_keys);
-
-                    if (dbBlockOld != redisClient.DBBlock)
-                    {
-                        OperateResult selectDb = redisClient.SelectDB(dbBlockOld);
-                        if (selectDb.IsSuccess == false)
-                        {
-                            MessageBox.Show(string.Format("Select [{0}] DB {1} fail", redisClient.Settings.name, dbBlockOld));
-
-                            return;
-                        }
-
-                        redisClient.DBBlock = dbBlockOld;
-                    }
-                }
+                db.KeyScan?.Dispose();
+                var client = (RedisClient)select.Parent.Tag;
+                db.KeyScan = client.ScanKeys(db.DBNumber, db.Filter, Config.scan_page_count).GetEnumerator();
+                db.Keys = new List<string>();
+                db.HasMoreKeys = true;
+                LoadDbKeyPage(select);
             }
+        }
+
+        private void LoadDbKeyPage(TreeNode node)
+        {
+            var db = (DbSettings)node.Tag;
+            if (!OperationDialog.TryRun(this, "Load keys", (token, progress) =>
+            {
+                var page = new List<string>();
+                bool more = true;
+                string error = null;
+                try
+                {
+                    while (page.Count < PageNavigator.PageSize && !token.IsCancellationRequested)
+                    {
+                        if (!db.KeyScan.MoveNext()) { more = false; break; }
+                        page.Add(db.KeyScan.Current.ToString());
+                    }
+                }
+                catch (RedisException ex) { error = ex.Message; more = false; }
+                return (Keys: page, More: more, Error: error, Canceled: token.IsCancellationRequested);
+            }, out var result)) return;
+            var existing = db.Keys.ToHashSet(StringComparer.Ordinal);
+            db.Keys.AddRange(result.Keys.Where(existing.Add));
+            db.HasMoreKeys = result.More;
+            if (!db.HasMoreKeys) { db.KeyScan.Dispose(); db.KeyScan = null; }
+            FilterKeys(node);
+            node.Expand();
+            if (result.Error != null) MessageBox.Show(this, result.Error + "\nAlready loaded keys remain; reload to retry.", "Key scan failed");
+            if (result.Canceled) toolStripStatusLabel1.Text = "Key scan paused; use Load next to continue";
         }
 
         private void BuildTreeNode_Folder(TreeNode parent)
@@ -1914,6 +1781,7 @@ namespace RedisGuiManager
         // Show value
         private void CreateRedisShowTagControl<T>() where T : UserControl, new()
         {
+            if (userControl != null && !ValueControl.ConfirmAll(userControl)) return;
             T control = new T();
             panel1.Controls.Add(control);
             control.Location = new Point(0, 0);
@@ -2024,6 +1892,17 @@ namespace RedisGuiManager
         }
 
         // Load / Save / Add servers
+        private RedisClient ObserveClient(RedisClient client)
+        {
+            client.ConnectionStatusChanged += status =>
+            {
+                if (!IsHandleCreated || IsDisposed) return;
+                try { BeginInvoke((Action)(() => { if (!IsDisposed) toolStripStatusLabel1.Text = $"{client.Settings.name}: {status}{(client.Settings.read_only ? " · read-only" : "")}"; })); }
+                catch (InvalidOperationException) { }
+            };
+            return client;
+        }
+
 		private void LoadRedisSettings()
         {
             treeView_server.Nodes.Clear();
@@ -2190,7 +2069,7 @@ namespace RedisGuiManager
                 }
 
                 redis_settings.Add(form.Settings);
-                form.Settings.redis_client = new RedisClient(form.Settings);
+                form.Settings.redis_client = ObserveClient(new RedisClient(form.Settings));
                 string defaultFull = Path.GetFullPath(GetDefaultConnectionsFile());
                 if (_failedFiles.Contains(defaultFull)) defaultFull = Path.Combine(GetConnectionsDir(), "connections.recovered.json");
                 _settingFileMap[form.Settings] = defaultFull;
@@ -2208,6 +2087,7 @@ namespace RedisGuiManager
         private void button_open_server_Click(object sender, EventArgs e)
         {
             // 刷新所有连接：重新扫描 connections 目录并以树根节点加载
+            if (!ValueControl.ConfirmAll(panel1)) return;
             LoadAllConnections();
         }
 
@@ -2244,6 +2124,7 @@ namespace RedisGuiManager
 
         public void delete_key_operate(TreeNode select, IDatabase database)
         {
+            if (!CanWriteSelected()) return;
             if (MessageBox.Show(string.Format("Delete key [{0}]?", select.Text), "Delete key", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
                 if (database.KeyDelete(select.Text))
@@ -2380,6 +2261,7 @@ namespace RedisGuiManager
 
         private void set_ttl_toolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!CanWriteSelected()) return;
             TreeNode select = treeView_server.SelectedNode;
             if (select == null || select.Tag is not RedisKey) return;
 
@@ -2451,6 +2333,7 @@ namespace RedisGuiManager
 
         private void remove_ttl_toolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!CanWriteSelected()) return;
             TreeNode select = treeView_server.SelectedNode;
             if (select == null || select.Tag is not RedisKey) return;
 
@@ -2555,7 +2438,7 @@ namespace RedisGuiManager
                 "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Source key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
                 new StackExchange.Redis.RedisKey[] { src_key });
             long ttl = (long)snapshot[1];
-            dst_db.Execute("RESTORE", dst_key, ttl < 0 ? 0 : Math.Max(1, ttl), (byte[])snapshot[0]);
+            dst_db.KeyRestore(dst_key, (byte[])snapshot[0], ttl < 0 ? null : TimeSpan.FromMilliseconds(Math.Max(1, ttl)));
 
             return true;
             }
@@ -2569,6 +2452,7 @@ namespace RedisGuiManager
 
 		private void copy_key_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+            if (!CanWriteSelected()) return;
 			TreeNode select = treeView_server.SelectedNode;
 			if (select == null)
 			{
@@ -2604,6 +2488,7 @@ namespace RedisGuiManager
 
 		private void copy_key_to_db_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+            if (!CanWriteSelected()) return;
 			TreeNode select = treeView_server.SelectedNode;
 			if (select == null)
 			{
@@ -2665,6 +2550,7 @@ namespace RedisGuiManager
 
 		private void copy_key_to_machine_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+            if (!CanWriteSelected()) return;
 			TreeNode select = treeView_server.SelectedNode;
 			if (select == null)
 			{
@@ -2708,49 +2594,21 @@ namespace RedisGuiManager
 
 		private void migrate_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			TreeNode select = treeView_server.SelectedNode;
-			if (select == null)
-			{
-				return;
-			}
+            if (!CanWriteSelected()) return;
+            var selected = treeView_server.SelectedNode;
+            if (selected?.Tag is not DbSettings db) return;
+            var client = (RedisClient)GetRedisNode(selected).Tag;
+            using var input = new FormMigrateKey { UsePattern = true };
+            if (input.ShowDialog(this) != DialogResult.OK) return;
+            if (!IPAddress.TryParse(input.Host, out var address)) { MessageBox.Show("Migration requires a target IP address"); return; }
+            var target = new IPEndPoint(address, input.Port);
+            int targetDb = input.DBNumber;
+            RunBatch(client, new[] { db.DBNumber }, input.KeyPattern, "Copy keys to server", $"Target: {target}, DB {targetDb}", (database, key) =>
+            {
+                database.KeyMigrate(key, target, targetDb, migrateOptions: MigrateOptions.Copy);
+                return true;
+            });
+        }
 
-			if (select.Tag is DbSettings dbSettings)
-			{
-				using (FormMigrateKey formInput = new FormMigrateKey())
-				{
-                    formInput.UsePattern = true;
-
-					if (formInput.ShowDialog() == DialogResult.OK)
-					{
-						RedisClient redisClient = select.Parent.Tag as RedisClient;
-						var reads = redisClient.ScanKeys(dbSettings.DBNumber, formInput.KeyPattern, Config.scan_page_count);
-						var db = redisClient.GetDB(dbSettings.DBNumber);
-
-                        IPEndPoint end_point = new IPEndPoint(IPAddress.Parse(formInput.Host), formInput.Port);
-
-                        int migrate_count = 0;
-
-                        try
-                        {
-                            foreach (var key in reads)
-                            {
-                                db.KeyMigrate(key, end_point, formInput.DBNumber, migrateOptions: MigrateOptions.Copy);
-                                ++migrate_count;
-                            }
-
-							MessageBox.Show($"Migrate key complete.\r\n\r\nkey pattern : {formInput.KeyPattern}\r\ntarget server : {$"{formInput.Host}:{formInput.Port}"}\r\ndb num : {formInput.DBNumber}\r\nmigrate count : {migrate_count}");
-						}
-						catch (RedisCommandException ex)
-						{
-							MessageBox.Show(ex.Message);
-						}
-						catch (RedisTimeoutException ex)
-						{
-							MessageBox.Show(ex.Message);
-						}
-					}
-				}
-			}
-		}
 	}
 }

@@ -15,6 +15,7 @@ namespace RedisGuiManager
         private string keyType = string.Empty;                          // Current key type
         private string keyName = string.Empty;                          // Current key name
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
 
         [Browsable(true)]
         [Description("Get or set the type expression of the current key value")]
@@ -55,11 +56,13 @@ namespace RedisGuiManager
 
         private void button_delete_Click(object sender, EventArgs e)
         {
-            MainForm.delete_key_operate(TargetNode, redisClient.Redis);
+            if (redisClient == null || !redisClient.CanWrite()) return;
+            MainForm.delete_key_operate(TargetNode, database);
         }
 
         private void button_ttl_Click(object sender, EventArgs e)
         {
+            if (redisClient == null || !redisClient.CanWrite()) return;
             try
             {
                 if (redisClient != null)
@@ -71,7 +74,7 @@ namespace RedisGuiManager
                         {
                             if (formInput.InputValue == "-1")
                             {
-                                if (redisClient.Redis.KeyPersist(keyName))
+                                if (database.KeyPersist(keyName))
                                 {
                                     MessageBox.Show("Set ttl success");
                                 }
@@ -84,7 +87,7 @@ namespace RedisGuiManager
                             {
                                 if (int.TryParse(formInput.InputValue, out int seconds) && seconds >= 0)
                                 {
-                                    if (redisClient.Redis.KeyExpire(keyName, new TimeSpan(0, 0, seconds)))
+                                    if (database.KeyExpire(keyName, new TimeSpan(0, 0, seconds)))
                                     {
                                         MessageBox.Show("Set ttl success");
                                     }
@@ -110,6 +113,8 @@ namespace RedisGuiManager
 
         private void button_rename_Click(object sender, EventArgs e)
         {
+            if (Parent != null && !ValueControl.ConfirmAll(Parent)) return;
+            if (redisClient == null || !redisClient.CanWrite()) return;
             try
             {
                 if (redisClient != null)
@@ -119,7 +124,7 @@ namespace RedisGuiManager
                         formInput.TextInfo = string.Format("Rename key [{0}]", keyName);
                         if (formInput.ShowDialog() == DialogResult.OK)
                         {
-                            if (!string.IsNullOrEmpty(formInput.InputValue) && redisClient.Redis.KeyRename(keyName, formInput.InputValue, StackExchange.Redis.When.NotExists))
+                            if (!string.IsNullOrEmpty(formInput.InputValue) && database.KeyRename(keyName, formInput.InputValue, StackExchange.Redis.When.NotExists))
                             {
                                 MainForm.RefreshRenamedKey(TargetNode, keyName, formInput.InputValue);
                             }
@@ -151,12 +156,14 @@ namespace RedisGuiManager
         public void SetRedisClient(RedisClient client, string keyName)
         {
             this.redisClient = client;
+            database = client?.Redis;
+            if (client != null && Parent != null) client.ApplyReadOnly(Parent);
             this.textBox_key.Text = keyName;
             this.keyName = keyName;
 
             if (client != null)
             {
-                var ttl_raw = client.Redis.Execute("TTL", keyName);
+                var ttl_raw = database.Execute("TTL", keyName);
                 long ttl_seconds = (long)ttl_raw;
                 button_ttl.Text = "TTL:" + FormatTTLShort(ttl_seconds);
             }

@@ -16,6 +16,8 @@ namespace RedisGuiManager
     {
         private string stringKeyName = string.Empty;
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
+        private readonly PageNavigator pages = new PageNavigator();
 
         private int lastSearchIndex = -1;
         private string searchCondition = string.Empty;
@@ -41,6 +43,12 @@ namespace RedisGuiManager
         public StreamValueControl()
         {
             InitializeComponent();
+            foreach (Control control in Controls)
+                if ((control.Anchor & AnchorStyles.Bottom) != 0) { if (control.Height > 72) control.Height -= 36; else control.Top -= 36; }
+            Controls.Add(pages);
+            pages.CanNavigate = valueControl.ConfirmDiscard;
+            pages.PageChanged += RefreshKey;
+            valueControl.ProtectSelection(dataGridView_stream);
 
             if (Config.darkmode > 0)
             {
@@ -68,19 +76,22 @@ namespace RedisGuiManager
 
         private void RefreshKey()
         {
+            if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
                 MessageBox.Show("Redis connection error");
                 return;
             }
 
-            if (redisClient.Redis == null)
+            if (database == null)
             {
                 MessageBox.Show("Redis connection error");
                 return;
             }
 
-            var entries = redisClient.Redis.StreamRange(stringKeyName);
+            if (!OperationDialog.TryRun(this, "Load page", (token, progress) => { var rows = pages.Read(redisClient.ScanStream(database, stringKeyName), token); token.ThrowIfCancellationRequested(); return rows; }, out var batch)) return;
+            pages.UpdatePage(batch.Length > PageNavigator.PageSize);
+            var entries = batch.Take(PageNavigator.PageSize).ToArray();
 
             int size = 0;
             for (int i = 0; i < entries.Length; i++)
@@ -94,7 +105,7 @@ namespace RedisGuiManager
             }
 
             label_size.Text = "Size : " + Utils.GetSizeDescription(size);
-            label_length_val.Text = entries.Length.ToString();
+            label_length_val.Text = $"{entries.Length} on this page";
 
             Utils.ControlDataGridViewRow(dataGridView_stream, entries.Length);
             for (int i = 0; i < entries.Length; i++)
@@ -128,7 +139,9 @@ namespace RedisGuiManager
 
         public void SetNewKey(RedisClient redisClient, string key)
         {
+            if (key != stringKeyName || redisClient != this.redisClient) pages.Reset();
             this.redisClient = redisClient;
+            database = redisClient.Redis;
             this.stringKeyName = key;
 
             dataGridView_stream.SelectionChanged -= dataGridView_stream_SelectionChanged;
@@ -143,6 +156,7 @@ namespace RedisGuiManager
 
         private void button_delete_row_Click(object sender, EventArgs e)
         {
+            if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_stream.SelectedRows.Count <= 0)
             {
                 MessageBox.Show("Please select a row");
@@ -153,7 +167,7 @@ namespace RedisGuiManager
 
             if (MessageBox.Show($"Delete entry [{entryId}] from stream [{stringKeyName}]?", "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
-                var deleted = redisClient.Redis.StreamDelete(stringKeyName, new RedisValue[] { entryId });
+                var deleted = database.StreamDelete(stringKeyName, new RedisValue[] { entryId });
                 if (deleted > 0)
                 {
                     RefreshKey();
@@ -167,7 +181,8 @@ namespace RedisGuiManager
 
         private void button_insert_row_Click(object sender, EventArgs e)
         {
-            using StreamValueInsertForm form = new StreamValueInsertForm(redisClient, stringKeyName);
+            if (redisClient == null || !redisClient.CanWrite()) return;
+            using StreamValueInsertForm form = new StreamValueInsertForm(redisClient, stringKeyName, database: database);
             form.ShowDialog();
             RefreshKey();
         }

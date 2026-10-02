@@ -27,6 +27,55 @@ namespace RedisGuiManager
 
         private RedisValue value;
         private string hexTempFile;
+        private string baseline = "";
+        private bool changingDisplay;
+        private DisplayType shownType;
+        public Func<bool> HasOtherChanges { get; set; }
+        public Action DiscardOtherChanges { get; set; }
+        private bool connectionReadOnly;
+        public bool ConnectionReadOnly
+        {
+            get => connectionReadOnly;
+            set { connectionReadOnly = value; textBox_value.ReadOnly = value || !CanEditText; }
+        }
+        public bool IsDirty => textBox_value.Text != baseline || (HasOtherChanges?.Invoke() ?? false);
+        public RedisValue OriginalValue => value;
+        public void AcceptChanges() { baseline = textBox_value.Text; }
+        public bool ConfirmDiscard()
+        {
+            if (!IsDirty) return true;
+            if (MessageBox.Show(this, "Discard unsaved edits?", "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return false;
+            DiscardOtherChanges?.Invoke();
+            AcceptChanges();
+            return true;
+        }
+        public static bool ConfirmAll(Control root)
+        {
+            if (root is ValueControl value && !value.ConfirmDiscard()) return false;
+            foreach (Control child in root.Controls) if (!ConfirmAll(child)) return false;
+            return true;
+        }
+        public void ProtectSelection(DataGridView grid)
+        {
+            DataGridViewRow previous = null;
+            bool restoring = false;
+            grid.SelectionChanged += (s, e) =>
+            {
+                if (restoring) return;
+                var selected = grid.SelectedRows.Count > 0 ? grid.SelectedRows[0] : null;
+                if (selected == previous) return;
+                if (!ConfirmDiscard() && previous?.DataGridView == grid)
+                {
+                    restoring = true;
+                    grid.ClearSelection();
+                    previous.Selected = true;
+                    grid.CurrentCell = previous.Cells[0];
+                    restoring = false;
+                    return;
+                }
+                previous = selected;
+            };
+        }
         public bool CanEditText { get; private set; } = true;
 
         private int lastSeachIndex = -1;
@@ -94,6 +143,7 @@ namespace RedisGuiManager
 
         public void SetValue(object value)
         {
+            if (!ConfirmDiscard()) return;
             if (value == null)
 			{
                 this.value = new RedisValue("");
@@ -109,8 +159,9 @@ namespace RedisGuiManager
 
             byte[] bytes = (byte[])this.value;
             CanEditText = bytes == null || Encoding.UTF8.GetBytes(this.value.ToString()).SequenceEqual(bytes);
-            textBox_value.ReadOnly = !CanEditText;
+            textBox_value.ReadOnly = connectionReadOnly || !CanEditText;
             ShowValue();
+            AcceptChanges();
         }
 
         protected override void OnHandleDestroyed(EventArgs e)
@@ -124,6 +175,7 @@ namespace RedisGuiManager
         {
             try
             {
+                shownType = dpType;
                 int size = (int)value.Length();
                 label_size.Text = "Size : " + Utils.GetSizeDescription(size);
 
@@ -192,7 +244,16 @@ namespace RedisGuiManager
 
         private void radioButton_display_type_CheckedChanged(object sender, EventArgs e)
         {
+            if (changingDisplay || sender is RadioButton radio && !radio.Checked) return;
+            if (!ConfirmDiscard())
+            {
+                changingDisplay = true;
+                new[] { radioButton_display_type_text, radioButton_display_type_json, radioButton_display_type_xml, radioButton_display_type_hex }[(int)shownType].Checked = true;
+                changingDisplay = false;
+                return;
+            }
             ShowValue();
+            AcceptChanges();
         }
 
         private void linkLabel_search_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)

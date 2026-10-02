@@ -98,6 +98,8 @@ namespace RedisGuiManager
 
 				try
 				{
+                    if (client.Settings.read_only && !new[] { "GET", "MGET", "TYPE", "TTL", "PTTL", "EXISTS", "STRLEN", "HGET", "HGETALL", "HSCAN", "HLEN", "LRANGE", "LLEN", "LINDEX", "SMEMBERS", "SSCAN", "SCARD", "ZRANGE", "ZCARD", "ZSCORE", "XRANGE", "XLEN", "SCAN", "PING", "INFO", "DBSIZE" }.Contains(cmd.ToUpperInvariant()))
+                        throw new InvalidOperationException("Command is not allowed in read-only mode");
                     var result = redis.Execute(cmd, args);
                     if (result.IsNull)
 					{
@@ -173,7 +175,7 @@ namespace RedisGuiManager
 
                     textBox_output.AppendText($"\r\n");
                 }
-                catch (RedisServerException ex)
+                catch (Exception ex)
 				{
                     textBox_output.AppendText(ex.Message + "\r\n");
                 }

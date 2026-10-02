@@ -16,6 +16,8 @@ namespace RedisGuiManager
         private DataGridViewRow selectRow = null;
         private string stringKeyName = string.Empty;
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
+        private readonly PageNavigator pages = new PageNavigator();
 
         private int lastSearchIndex = -1;
         private string searchCondition = string.Empty;
@@ -41,6 +43,12 @@ namespace RedisGuiManager
         public SetValueControl()
         {
             InitializeComponent();
+            foreach (Control control in Controls)
+                if ((control.Anchor & AnchorStyles.Bottom) != 0) { if (control.Height > 72) control.Height -= 36; else control.Top -= 36; }
+            Controls.Add(pages);
+            pages.CanNavigate = valueControl.ConfirmDiscard;
+            pages.PageChanged += RefreshKey;
+            valueControl.ProtectSelection(dataGridView_set);
 
             if (Config.darkmode > 0)
             {
@@ -68,13 +76,16 @@ namespace RedisGuiManager
 
         private void RefreshKey()
         {
+            if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
                 MessageBox.Show("Redis connection error");
                 return;
             }
 
-            var read = redisClient.Redis.SetMembers(stringKeyName);
+            if (!OperationDialog.TryRun(this, "Load page", (token, progress) => { var rows = pages.Read(database.SetScan(stringKeyName, pageSize: PageNavigator.PageSize), token); token.ThrowIfCancellationRequested(); return rows; }, out var batch)) return;
+            pages.UpdatePage(batch.Length > PageNavigator.PageSize);
+            var read = batch.Take(PageNavigator.PageSize).ToArray();
 
             int size = 0;
             for (int i = 0; i < read.Length; i++)
@@ -83,13 +94,13 @@ namespace RedisGuiManager
             }
 
             label_size.Text = "Size : " + Utils.GetSizeDescription(size);
-            label_length_val.Text = read.Length.ToString();
+            label_length_val.Text = $"{read.Length} on this page";
 
             Utils.ControlDataGridViewRow(dataGridView_set, read.Length);
             for (int i = 0; i < read.Length; i++)
             {
-                dataGridView_set.Rows[i].Cells[0].Value = i;
-                dataGridView_set.Rows[i].Cells[1].Value = read[i].ToString();
+                dataGridView_set.Rows[i].Cells[0].Value = pages.Offset + i;
+                dataGridView_set.Rows[i].Cells[1].Value = read[i];
             }
         }
 
@@ -100,10 +111,10 @@ namespace RedisGuiManager
                 if (dataGridView_set.SelectedRows[0].Cells[1].Value != null)
                 {
                     selectRow = dataGridView_set.SelectedRows[0];
-                    string value = selectRow.Cells[1].Value.ToString();
+                    object value = selectRow.Cells[1].Value;
 
                     valueControl.SetValue(value);
-                    button_save.Enabled = true;
+                    button_save.Enabled = redisClient != null && !redisClient.Settings.read_only;
                 }
             }
             else
@@ -115,12 +126,14 @@ namespace RedisGuiManager
 
         public void SetNewKey(RedisClient redisClient, string key)
         {
+            if (key != stringKeyName || redisClient != this.redisClient) pages.Reset();
             if (key != stringKeyName)
             {
                 valueControl.SetValue(string.Empty);
             }
 
             this.redisClient = redisClient;
+            database = redisClient.Redis;
             stringKeyName = key;
 
             dataGridView_set.SelectionChanged -= dataGridView_set_SelectionChanged;
@@ -133,7 +146,8 @@ namespace RedisGuiManager
 
         private void button_insert_row_Click(object sender, EventArgs e)
         {
-            using (SetValueInsertForm form = new SetValueInsertForm(redisClient, stringKeyName))
+            if (redisClient == null || !redisClient.CanWrite()) return;
+            using (SetValueInsertForm form = new SetValueInsertForm(redisClient, stringKeyName, database: database))
             {
                 form.ShowDialog();
                 RefreshKey();
@@ -142,13 +156,14 @@ namespace RedisGuiManager
 
         private void button_delete_row_Click(object sender, EventArgs e)
         {
+            if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_set.SelectedRows.Count > 0)
             {
                 if (dataGridView_set.SelectedRows[0].Cells[1].Value != null)
                 {
                     if (MessageBox.Show(string.Format("Delete Key:{0}", stringKeyName), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                     {
-                        if (redisClient.Redis.SetRemove(stringKeyName, dataGridView_set.SelectedRows[0].Cells[1].Value.ToString()))
+                        if (database.SetRemove(stringKeyName, (StackExchange.Redis.RedisValue)dataGridView_set.SelectedRows[0].Cells[1].Value))
                         {
                             MessageBox.Show("Delete row success");
                             RefreshKey();
@@ -211,6 +226,8 @@ namespace RedisGuiManager
 
 		private void button_save_Click(object sender, EventArgs e)
 		{
+            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show("Binary/Hex values are read-only"); return; }
+            if (redisClient == null || !redisClient.CanWrite()) return;
             try
             {
                 if (dataGridView_set.SelectedRows.Count <= 0)
@@ -230,12 +247,13 @@ namespace RedisGuiManager
                     }
                 }
 
-                redisClient.Redis.ScriptEvaluate(
+                database.ScriptEvaluate(
                     "if redis.call('SISMEMBER',KEYS[1],ARGV[1]) == 0 then return redis.error_reply('Member changed; refresh first') end; redis.call('SADD',KEYS[1],ARGV[2]); if ARGV[1] ~= ARGV[2] then redis.call('SREM',KEYS[1],ARGV[1]) end; return 1",
                     new StackExchange.Redis.RedisKey[] { stringKeyName },
                     new StackExchange.Redis.RedisValue[] { selectRow.Cells[1].Value.ToString(), save_text });
 
-                RefreshKey();
+                valueControl.AcceptChanges();
+            RefreshKey();
 
             }
             catch (StackExchange.Redis.RedisException ex)

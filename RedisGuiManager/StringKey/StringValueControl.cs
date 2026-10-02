@@ -15,6 +15,7 @@ namespace RedisGuiManager
     {
         private string stringKeyName = string.Empty;
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
 
         [Browsable(false)]
         public FormMain MainForm
@@ -52,6 +53,7 @@ namespace RedisGuiManager
         public void SetNewKey(RedisClient client, string key)
         {
             redisClient = client;
+            database = client.Redis;
             stringKeyName = key;
 
             keyOperateControl.SetRedisClient(redisClient, key);
@@ -65,26 +67,29 @@ namespace RedisGuiManager
 
         private void RefreshKey()
         {
+            if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
                 MessageBox.Show("Redis connection error");
                 return;
             }
 
-            if (redisClient.Redis == null)
+            if (database == null)
             {
                 MessageBox.Show("Redis connection error");
                 return;
             }
 
-            var read = redisClient.Redis.StringGet(stringKeyName);
+            var read = database.StringGet(stringKeyName);
             valueControl.SetValue(read);
         }
 
         private void button_save_Click(object sender, EventArgs e)
         {
+            if (redisClient == null || !redisClient.CanWrite()) return;
             try
             {
+                if (valueControl.OriginalValue.IsNull) { MessageBox.Show("Key is missing; refresh or create it explicitly"); return; }
                 if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex)
                 {
                     MessageBox.Show("Binary/Hex values are read-only. Switch to text for text values.");
@@ -102,7 +107,11 @@ namespace RedisGuiManager
                     }
                 }
 
-                redisClient.Redis.StringSet(stringKeyName, save_text, expiry: null, keepTtl: true);
+                database.ScriptEvaluate(
+                    "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return redis.error_reply('Value changed; refresh before saving') end; local ttl=redis.call('PTTL',KEYS[1]); redis.call('SET',KEYS[1],ARGV[2]); if ttl >= 0 then redis.call('PEXPIRE',KEYS[1],ttl) end; return 1",
+                    new StackExchange.Redis.RedisKey[] { stringKeyName },
+                    new StackExchange.Redis.RedisValue[] { valueControl.OriginalValue, save_text });
+                valueControl.AcceptChanges();
                 RefreshKey();
             }
             catch (StackExchange.Redis.RedisException ex)

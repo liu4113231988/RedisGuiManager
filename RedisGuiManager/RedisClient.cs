@@ -15,6 +15,21 @@ namespace RedisGuiManager
         private ConfigurationOptions config = null;
         private RedisSettings settings = null;
 
+        public event Action<string> ConnectionStatusChanged;
+        public bool IsConnected => connection?.IsConnected == true;
+        public bool CanWrite()
+        {
+            if (!Settings.read_only) return true;
+            System.Windows.Forms.MessageBox.Show("This connection is read-only. Change its settings to enable writes.", "Read-only connection");
+            return false;
+        }
+        public void ApplyReadOnly(System.Windows.Forms.Control root)
+        {
+            if (root is ValueControl value) value.ConnectionReadOnly = Settings.read_only;
+            if (root is System.Windows.Forms.Button button && new[] { "button_save", "button_insert_row", "button_delete_row", "button_delete", "button_ttl", "button_rename" }.Contains(button.Name))
+                button.Enabled = !Settings.read_only;
+            foreach (System.Windows.Forms.Control child in root.Controls) ApplyReadOnly(child);
+        }
         public SshClient TunnelSsh { get; set; }
         public ForwardedPortLocal Tunnel { get; set; }
         public int DBBlock { get; set; }
@@ -47,6 +62,7 @@ namespace RedisGuiManager
                 ConnectTimeout = connectTimeout,
                 DefaultDatabase = 0,
                 Password = settings.auth,
+                User = string.IsNullOrWhiteSpace(settings.username) ? null : settings.username,
                 Ssl = settings.use_ssl,
                 SslHost = settings.use_ssl ? settings.host : null
             };
@@ -160,20 +176,26 @@ namespace RedisGuiManager
                 }
                 catch (System.Exception ex)
                 {
+                    Close();
                     return new OperateResult(false, "\r\nTunnel connection fail\r\n" + ex.ToString());
                 }
             }
 
             try
 			{
+                ConnectionStatusChanged?.Invoke("Connecting…");
                 connection = ConnectionMultiplexer.Connect(temp_config);
+                connection.ConnectionFailed += (s, e) => ConnectionStatusChanged?.Invoke("Disconnected; reconnecting…");
+                connection.ConnectionRestored += (s, e) => ConnectionStatusChanged?.Invoke("Connected");
             }
             catch (RedisConnectionException ex)
 			{
+                Close();
                 return new OperateResult(false, "\r\nConnection fail\r\n" + ex.ToString());
 			}
             catch (RedisException ex)
             {
+                Close();
                 return new OperateResult(false, "\r\nConnection fail\r\n" + ex.ToString());
             }
 
@@ -188,11 +210,13 @@ namespace RedisGuiManager
             }
             Redis = connection.GetDatabase();
 
+            ConnectionStatusChanged?.Invoke("Connected");
             return new OperateResult(true, "");
         }
 
         public void Close()
         {
+            ConnectionStatusChanged?.Invoke("Disconnected");
             if (connection != null)
             {
                 connection.Dispose();
@@ -221,6 +245,18 @@ namespace RedisGuiManager
             if (database != 0) throw new ArgumentOutOfRangeException(nameof(database), "Cluster supports DB 0 only");
             var servers = ClusterPrimaryServers();
             return servers.SelectMany(s => s.Keys(0, pattern, pageSize)).Distinct();
+        }
+
+        public IEnumerable<StreamEntry> ScanStream(IDatabase database, string key)
+        {
+            RedisValue min = "-";
+            while (true)
+            {
+                var page = database.StreamRange(key, minId: min, count: PageNavigator.PageSize + 1);
+                foreach (var entry in page) if (entry.Id != min) yield return entry;
+                if (page.Length <= PageNavigator.PageSize) yield break;
+                min = page[page.Length - 1].Id;
+            }
         }
 
         private IServer[] ClusterPrimaryServers()

@@ -24,6 +24,8 @@ namespace RedisGuiManager
     {
         [JsonConverter(typeof(CredentialConverter))]
         public string auth { get; set; }
+        public string username { get; set; }
+        public bool read_only { get; set; }
         public string host { get; set; }
         public string name { get; set; }
         public int port { get; set; }
@@ -73,5 +75,7 @@ namespace RedisGuiManager
         public int DBNumber { get; set; }
         public string Filter { get; set; }
         public List<string> Keys { get; set; }
+        public IEnumerator<StackExchange.Redis.RedisKey> KeyScan { get; set; }
+        public bool HasMoreKeys { get; set; }
     }
 }

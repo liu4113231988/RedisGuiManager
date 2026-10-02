@@ -13,9 +13,10 @@ namespace RedisGuiManager
     public partial class ZSetValueInsertForm : Form
     {
         private RedisClient redisClient = null;
+        private StackExchange.Redis.IDatabase database;
         private string key = string.Empty;
 
-        public ZSetValueInsertForm(RedisClient client, string key)
+        public ZSetValueInsertForm(RedisClient client, string key, StackExchange.Redis.IDatabase database = null)
         {
             InitializeComponent();
 
@@ -25,6 +26,7 @@ namespace RedisGuiManager
             }
 
             redisClient = client;
+            this.database = database ?? client.Redis;
             this.key = key;
         }
 
@@ -32,7 +34,7 @@ namespace RedisGuiManager
         {
             textBox_server.Text = string.Format("{0}[{1}:{2}]", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port);
             textBox_key.Text = key;
-            textBox_db_num.Text = redisClient.DBBlock.ToString();
+            textBox_db_num.Text = database.Database.ToString();
             textBox_score.Text = "0";
 
             Icon = Icon.FromHandle(Properties.Resources.zset.GetHicon());
@@ -40,13 +42,16 @@ namespace RedisGuiManager
 
         private void button_save_Click(object sender, EventArgs e)
         {
+            try
+            {
+            if (redisClient == null || !redisClient.CanWrite()) return;
             if (double.TryParse(textBox_score.Text, out double sco) == false)
             {
                 MessageBox.Show("Invalid score");
                 return;
             }
 
-            if (redisClient.Redis.SortedSetAdd(key, textBox_value.Text, sco))
+            if (database.SortedSetAdd(key, textBox_value.Text, sco))
             {
                 Close();
                 return;
@@ -54,6 +59,12 @@ namespace RedisGuiManager
             else
             {
                 MessageBox.Show("Save fail");
+            }
+
+            }
+            catch (Exception ex) when (ex is StackExchange.Redis.RedisException || ex is ObjectDisposedException)
+            {
+                MessageBox.Show(this, ex.Message, "Write failed; input preserved");
             }
         }
 

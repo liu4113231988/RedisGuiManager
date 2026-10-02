@@ -13,6 +13,31 @@ This tool is very fast.
 This can find key, value, hash value by sql query.  
 Enjoy.  
 
+## Runtime and operation controls
+
+Requires .NET 10 on Windows. Connection settings include a Redis ACL username
+(blank uses the default user) and an optional read-only mode. Read-only mode
+blocks GUI writes and restricts console commands; server-side permissions remain
+controlled by the Redis ACL user.
+
+Key browsing loads 500 keys at a time. Hash, List, Set, Sorted Set and Stream
+viewers show 500 entries per page; their search applies to the current page.
+SCAN pages reflect live data, so refreshing is advisable when records change.
+SQL queries expose adjustable limits for keys per database and rows per key;
+they operate on that bounded snapshot and display at most 10,000 result rows.
+
+Long operations show progress and support cancellation at safe boundaries;
+underlying Redis requests may need to finish first. Batch deletion and migration show the exact scanned key count,
+connection, databases and examples before execution. Result dialogs list failures
+and can save the full report. Canceled imports, deletes and migrations retain
+already completed changes; canceled exports save completed keys when any exist.
+
+Editors warn before discarding unsaved changes. String, Hash and List saves
+compare the loaded value atomically, Set edits check the original member still
+exists, and Sorted Set edits check its original score. Conflicts retain edits
+for review rather than overwrite newer data. Use Reload server to reconnect;
+failed writes keep the input available.
+
 ## LICENSE
 
 #### MIT Licence
