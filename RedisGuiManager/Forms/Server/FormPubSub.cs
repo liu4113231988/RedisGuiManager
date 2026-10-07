@@ -16,6 +16,7 @@ namespace RedisGuiManager
         private RedisClient redisClient;
         private ISubscriber subscriber;
         private Dictionary<string, ChannelMessageQueue> subscriptions = new Dictionary<string, ChannelMessageQueue>();
+        private ChannelMessageQueue keyspaceSubscription;
 
         // A long-running subscription would otherwise grow the grid without bound and eventually
         // lock up the UI. Oldest rows are dropped once the cap is reached.
@@ -25,6 +26,20 @@ namespace RedisGuiManager
         public FormPubSub(RedisClient client)
         {
             InitializeComponent();
+
+            // Keyspace notifications ride on pattern subscription, so they fit naturally here.
+            var keyspaceButton = new Button
+            {
+                Text = "Watch keyspace events",
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Size = new Size(170, textBox_channel.Height),
+                UseVisualStyleBackColor = true
+            };
+            keyspaceButton.Location = new Point(Width - keyspaceButton.Width - 20, textBox_channel.Top);
+            keyspaceButton.Click += (s, e) => SubscribeKeyspaceNotifications();
+            Resize += (s, e) => keyspaceButton.Left = ClientSize.Width - keyspaceButton.Width - 20;
+            Controls.Add(keyspaceButton);
+            keyspaceButton.BringToFront();
 
             if (Config.darkmode > 0)
             {
@@ -79,18 +94,21 @@ namespace RedisGuiManager
 
             try
             {
-                var queue = subscriber.Subscribe(channel);
+                // A trailing '*' subscribes by pattern; everything else is a literal channel.
+                bool isPattern = channel.Contains('*') || channel.Contains('?') || channel.Contains('[');
+                var redisChannel = isPattern ? RedisChannel.Pattern(channel) : RedisChannel.Literal(channel);
+                var queue = subscriber.Subscribe(redisChannel);
                 queue.OnMessage(msg =>
                 {
                     this.BeginInvoke((Action)(() =>
                     {
-                        AppendMessage(channel, msg.Message.ToString());
+                        AppendMessage(msg.Channel.ToString(), msg.Message.ToString());
                     }));
                 });
 
                 subscriptions[channel] = queue;
 
-                listBox_channels.Items.Add(channel);
+                listBox_channels.Items.Add(isPattern ? $"{channel}  (pattern)" : channel);
                 textBox_channel.Clear();
                 label_sub_count.Text = $"Subscriptions: {subscriptions.Count}";
             }
@@ -146,13 +164,78 @@ namespace RedisGuiManager
 
             try
             {
-                long receivers = subscriber.Publish(channel, message);
+                long receivers = subscriber.Publish(RedisChannel.Literal(channel), message);
                 toolStripStatusLabel1.Text = $"Published to {channel}, {receivers} receiver(s)";
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Publish failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        /// <summary>
+        /// Subscribes to Redis keyspace notifications for every DB, which is how a client observes
+        /// expiries, evictions and invalidations caused by other clients. Requires the server to be
+        /// configured with notify-keyspace-events (otherwise the subscription simply stays silent).
+        /// </summary>
+        private void SubscribeKeyspaceNotifications()
+        {
+            if (subscriber == null)
+            {
+                MessageBox.Show("Subscriber not available");
+                return;
+            }
+
+            if (keyspaceSubscription != null)
+            {
+                MessageBox.Show("Keyspace notifications are already being watched.");
+                return;
+            }
+
+            try
+            {
+                // Reports DEL, EXPIRE, EXPIRED, RENAMED and similar for every key in every DB.
+                // Equivalent to RedisChannel.KeySpacePattern("*"), written out to avoid that
+                // helper's awkward ref parameter.
+                var channel = RedisChannel.Pattern("__keyspace@*__:*");
+                var queue = subscriber.Subscribe(channel);
+
+                queue.OnMessage(msg =>
+                {
+                    this.BeginInvoke((Action)(() =>
+                    {
+                        // Messages look like: "__keyspace@0__:mykey" -> "expired"
+                        string payload = msg.Message.ToString();
+                        string source = msg.Channel.ToString();
+                        int separator = source.IndexOf("__:");
+                        string key = separator >= 0 && source.Length > separator + 3
+                            ? source.Substring(separator + 3)
+                            : source;
+                        AppendMessage($"{key}  (db{ExtractDatabase(source)})", payload);
+                    }));
+                });
+
+                keyspaceSubscription = queue;
+                listBox_channels.Items.Add("__keyspace@*__:key  (keyspace notifications)");
+                label_sub_count.Text = $"Subscriptions: {subscriptions.Count + 1}";
+
+                MessageBox.Show(this,
+                    "Watching keyspace notifications for every database.\r\n\r\n" +
+                    "You will only see events if the server has notify-keyspace-events enabled " +
+                    "(for example: CONFIG SET notify-keyspace-events \"KEA\").",
+                    "Keyspace notifications", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to watch keyspace notifications\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static string ExtractDatabase(string channel)
+        {
+            int at = channel.IndexOf('@');
+            int separator = channel.IndexOf("__:", at < 0 ? 0 : at);
+            return at >= 0 && separator > at + 1 ? channel.Substring(at + 1, separator - at - 1) : "?";
         }
 
         private void AppendMessage(string channel, string message)
@@ -220,6 +303,12 @@ namespace RedisGuiManager
                 try { kv.Value.Unsubscribe(); } catch { }
             }
             subscriptions.Clear();
+
+            if (keyspaceSubscription != null)
+            {
+                try { keyspaceSubscription.Unsubscribe(); } catch { }
+                keyspaceSubscription = null;
+            }
         }
     }
 }

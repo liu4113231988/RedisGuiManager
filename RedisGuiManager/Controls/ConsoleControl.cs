@@ -106,7 +106,8 @@ namespace RedisGuiManager
                         AppendOutput($"(nil)\r\n");
                     }
 
-                    switch (result.Type)
+                    // Resp2Type (not the obsolete ResultType alias) so RESP3 replies are still classified.
+                    switch (result.Resp2Type)
 					{
                         case ResultType.None:
 							{
@@ -138,17 +139,17 @@ namespace RedisGuiManager
                             }
                             break;
 
-                        case ResultType.MultiBulk:
-							{
-                                int idx = 0;
-								var results = (RedisResult[])result;
+                        case ResultType.Array:
+                        						{
+                                                    int idx = 0;
+                        							var results = (RedisResult[])result;
 
-                                if (results.Count() > 0)
-                                {
-                                    foreach (var item in results)
-                                    {
-                                        if (item.Type != ResultType.MultiBulk)
-										{
+                                                    if (results.Count() > 0)
+                                                    {
+                                                        foreach (var item in results)
+                                                        {
+                                                            if (item.Resp2Type != ResultType.Array)
+                        									{
                                             if (item.IsNull)
 											{
                                                 AppendOutput($" {++idx}) (nil)\r\n");

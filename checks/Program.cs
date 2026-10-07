@@ -89,7 +89,25 @@ static class RegressionChecks
             "Group member was cloned instead of reusing the live connection");
     }
 
-    // The import must refuse a file that is not an export before writing anything, and the messages it
+    // Keyspace notifications arrive on "__keyspace@<db>__:<key>"; the db has to be pulled out of that
+    // shape without swallowing the key or an "@" that appears inside the key itself.
+    static void CheckKeyspaceChannelParsing()
+    {
+        var extract = typeof(FormPubSub).GetMethod("ExtractDatabase",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Check(extract != null, "Keyspace channel parser missing");
+
+        Check((string)extract.Invoke(null, new object[] { "__keyspace@0__:mykey" }) == "0",
+            "Database not extracted from a keyspace channel");
+        Check((string)extract.Invoke(null, new object[] { "__keyspace@12__:some:key" }) == "12",
+            "Multi-digit database not extracted from a keyspace channel");
+        Check((string)extract.Invoke(null, new object[] { "__keyspace@3__:user@example.com" }) == "3",
+            "An '@' inside the key confused the database parser");
+        Check((string)extract.Invoke(null, new object[] { "no-at-sign" }) == "?",
+            "Unexpected channel did not fall back to '?'");
+    }
+
+// The import must refuse a file that is not an export before writing anything, and the messages it
     // shows the user have to name the offending key rather than just the field.
     static void CheckImportFileInspection()
     {
@@ -202,6 +220,7 @@ static class RegressionChecks
         var copy = JsonConvert.DeserializeObject<RedisSettings>(JsonConvert.SerializeObject(settings));
         Check(copy.username == "inspector" && copy.read_only, "ACL/readonly settings not persisted");
         CheckGroupEditing();
+        CheckKeyspaceChannelParsing();
         CheckStringToolsLayout();
         using (var root = new Panel())
         using (var editor = new ValueControl())
