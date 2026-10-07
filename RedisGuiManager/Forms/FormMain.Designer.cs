@@ -426,6 +426,13 @@ namespace RedisGuiManager
             this.pubsub_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
             this.pubsub_ToolStripMenuItem.Text = "Pub/Sub";
             this.pubsub_ToolStripMenuItem.Click += new System.EventHandler(this.pubsub_ToolStripMenuItem_Click);
+			//
+			// server_tools_ToolStripMenuItem
+			//
+			this.server_tools_ToolStripMenuItem.Name = "server_tools_ToolStripMenuItem";
+			this.server_tools_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
+			this.server_tools_ToolStripMenuItem.Text = "Server tools";
+			this.server_tools_ToolStripMenuItem.Click += new System.EventHandler(this.server_tools_ToolStripMenuItem_Click);
 			// 
 			// reload_server_ToolStripMenuItem
 			// 

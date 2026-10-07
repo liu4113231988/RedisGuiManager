@@ -819,6 +819,25 @@ namespace RedisGuiManager
             }
         }
 
+        private void server_tools_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+
+            if (select.Tag is RedisClient client)
+            {
+                if (client.Redis == null)
+                {
+                    MessageBox.Show(this, "Connect to the server first.", "Server tools",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                FormServerTools form = new FormServerTools(client);
+                form.Show(this);
+            }
+        }
+
         private void pubsub_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
