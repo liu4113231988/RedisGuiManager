@@ -380,9 +380,11 @@ namespace RedisGuiManager
                 // RESTORE overwrites unconditionally, so EXISTS + RESTORE as two round trips would
                 // clobber a key written in between. The Lua script keeps the check and the restore
                 // in one atomic step, exactly like the value branch below.
+                // RESTORE takes (key, ttl, serialized-value); ARGV pairs payload, ttl in that order,
+                // so the ttl must come first in the call or the payload is parsed as the TTL.
                 const string restoreScript = @"
 if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
-redis.call('RESTORE', KEYS[1], ARGV[1], ARGV[2])
+redis.call('RESTORE', KEYS[1], ARGV[2], ARGV[1])
 return 1";
                 StackExchange.Redis.RedisValue restoreTtl = ttl < 0 ? (StackExchange.Redis.RedisValue)"0" : (StackExchange.Redis.RedisValue)(long)ttl;
                 RedisResult restored = database.ScriptEvaluate(restoreScript,

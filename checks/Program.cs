@@ -535,7 +535,9 @@ static class RegressionChecks
         string Script(string relativePath)
         {
             string source = File.ReadAllText(Path.Combine("RedisGuiManager", relativePath));
-            return System.Text.RegularExpressions.Regex.Match(source, "ScriptEvaluate\\(\\s*\"([^\"]+)\"").Groups[1].Value;
+            // The editors call ScriptEvaluateAsync, so the extraction has to accept the async form;
+            // matching only ScriptEvaluate( returned an empty script and made the checks vacuous.
+            return System.Text.RegularExpressions.Regex.Match(source, "ScriptEvaluate(?:Async)?\\(\\s*\"([^\"]+)\"").Groups[1].Value;
         }
         try
         {
@@ -606,8 +608,10 @@ static class RegressionChecks
             string SavingScript(string relativePath)
             {
                 string source = File.ReadAllText(Path.Combine("RedisGuiManager", relativePath));
-                int start = source.IndexOf("private void button_save_Click", StringComparison.Ordinal);
-                return System.Text.RegularExpressions.Regex.Match(source.Substring(start), "ScriptEvaluate\\(\\s*\"([^\"]+)\"").Groups[1].Value;
+                // The save handlers are `private async void button_save_Click`, so match the name alone.
+                int start = source.IndexOf("button_save_Click", StringComparison.Ordinal);
+                if (start < 0) throw new InvalidOperationException("button_save_Click not found in " + relativePath);
+                return System.Text.RegularExpressions.Regex.Match(source.Substring(start), "ScriptEvaluate(?:Async)?\\(\\s*\"([^\"]+)\"").Groups[1].Value;
             }
             db.KeyDelete(key);
             db.StringSet(key, "server-new", TimeSpan.FromMinutes(5));
