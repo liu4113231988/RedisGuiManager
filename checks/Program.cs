@@ -598,13 +598,6 @@ static class RegressionChecks
             db.ScriptEvaluate(listScript, redisKey, new StackExchange.Redis.RedisValue[] { 0, "first", "marker" });
             Check(db.ListLength(key) == 1 && db.ListGetByIndex(key, 0) == "last", "List deletion failed");
             db.KeyDelete(key);
-            db.StringSet(key, "old", TimeSpan.FromMinutes(5));
-            var client = new RedisClient(new RedisSettings { host = "127.0.0.1", port = 6379 }) { Redis = db };
-            using var control = new StringValueControl();
-            control.SetNewKey(client, key);
-            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
-            typeof(StringValueControl).GetMethod("button_save_Click", flags).Invoke(control, new object[] { null, EventArgs.Empty });
-            Check(db.KeyTimeToLive(key).HasValue, "String save removed TTL");
             string SavingScript(string relativePath)
             {
                 string source = File.ReadAllText(Path.Combine("RedisGuiManager", relativePath));
@@ -613,6 +606,22 @@ static class RegressionChecks
                 if (start < 0) throw new InvalidOperationException("button_save_Click not found in " + relativePath);
                 return System.Text.RegularExpressions.Regex.Match(source.Substring(start), "ScriptEvaluate(?:Async)?\\(\\s*\"([^\"]+)\"").Groups[1].Value;
             }
+
+            // Drive the product's save script directly rather than the editor control. Creating a
+            // control installs a WindowsFormsSynchronizationContext, so awaiting SetNewKey here would
+            // post its continuation to a UI queue that never pumps (deadlock), and invoking the save
+            // before the value had loaded popped a modal "key is missing" dialog that blocked the run.
+            string stringSaveScript = SavingScript("StringKey/StringValueControl.cs");
+            db.StringSet(key, "old", TimeSpan.FromMinutes(5));
+            double ttl_before = db.KeyTimeToLive(key)?.TotalMilliseconds ?? 0;
+            db.ScriptEvaluate(stringSaveScript, redisKey, new RedisValue[] { "old", "edited-in-place" });
+
+            // The previous assertion could not fail: StringSet had already put a TTL on the key, so the
+            // save itself was never exercised. Assert the edit landed and the TTL survived it.
+            Check(db.StringGet(key) == "edited-in-place", "String save did not write the edited value");
+            double ttl_after = db.KeyTimeToLive(key)?.TotalMilliseconds ?? 0;
+            Check(ttl_after > 0 && ttl_before - ttl_after < 2000, "String save removed TTL");
+            db.KeyDelete(key);
             db.KeyDelete(key);
             db.StringSet(key, "server-new", TimeSpan.FromMinutes(5));
             rejected = false;
