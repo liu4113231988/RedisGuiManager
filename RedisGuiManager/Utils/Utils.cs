@@ -15,8 +15,115 @@ namespace RedisGuiManager
 {
     public class Utils
     {
-        public static string Version { get; set; } = "1.0.0";
+        private static string version;
+
+        // Single source of truth is the csproj (<Version>/<AssemblyVersion>), so the UI can
+        // never drift away from the shipped build the way a hard-coded string did.
+        public static string Version
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(version))
+                {
+                    version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+                }
+
+                return version;
+            }
+            set => version = value;
+        }
         private static List<string> sql_keyword_list;
+
+        // Commands that never mutate the keyspace. Used to gate the raw command console when the
+        // connection is marked read-only. Anything not listed here is treated as a write, so the
+        // list errs on the side of refusing.
+        private static readonly HashSet<string> read_only_commands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Keys / generic
+            "GET", "MGET", "TYPE", "TTL", "PTTL", "EXPIRETIME", "PEXPIRETIME", "EXISTS", "STRLEN",
+            "GETRANGE", "SUBSTR", "LCS", "RANDOMKEY", "DBSIZE", "SCAN", "DUMP",
+            // Hash
+            "HGET", "HGETALL", "HMGET", "HKEYS", "HVALS", "HLEN", "HEXISTS", "HSCAN", "HSTRLEN", "HRANDFIELD",
+            // List
+            "LRANGE", "LLEN", "LINDEX", "LPOS",
+            // Set
+            "SMEMBERS", "SISMEMBER", "SMISMEMBER", "SCARD", "SRANDMEMBER", "SSCAN", "SDIFF", "SINTER", "SUNION",
+            // Sorted set
+            "ZRANGE", "ZRANGEBYSCORE", "ZRANGEBYLEX", "ZREVRANGE", "ZREVRANGEBYSCORE", "ZREVRANGEBYLEX",
+            "ZRANK", "ZREVRANK", "ZSCORE", "ZMSCORE", "ZCARD", "ZCOUNT", "ZLEXCOUNT", "ZSCAN", "ZRANDMEMBER",
+            // Stream (consumer groups are excluded: XREADGROUP/XACK/XCLAIM all mutate)
+            "XRANGE", "XREVRANGE", "XLEN", "XPENDING", "XREAD",
+            // Bitmap / hyperloglog / geo
+            "GETBIT", "BITCOUNT", "BITPOS", "BITFIELD_RO", "PFCOUNT", "GEODIST", "GEOHASH", "GEOPOS",
+            // Server introspection
+            "PING", "ECHO", "INFO", "TIME", "LOLWUT", "SLOWLOG_GET", "SLOWLOG_LEN",
+            "LATENCY_HISTORY", "LATENCY_LATEST", "MEMORY_DOCTOR", "MEMORY_STATS",
+            "ACL_LIST", "ACL_WHOAMI", "ACL_GETUSER", "ACL_CAT",
+        };
+
+        // Commands whose read-only subcommands must be listed explicitly, e.g. "CONFIG GET" is
+        // safe but "CONFIG SET" is not. The subcommand is the token after the command name.
+        private static readonly Dictionary<string, HashSet<string>> read_only_subcommands =
+            new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CONFIG"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "GET" },
+                ["CLIENT"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "LIST", "INFO", "ID", "GETNAME", "NO-EVICT", "NO-TOUCH", "REPLY"
+                },
+                ["XINFO"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "STREAM", "GROUPS", "CONSUMERS"
+                },
+                ["OBJECT"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "ENCODING", "REFCOUNT", "IDLETIME", "FREQ", "HELP"
+                },
+                ["MEMORY"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "USAGE", "DOCTOR", "STATS", "MALLOC-STATS", "HELP"
+                },
+                ["COMMAND"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "DOCS", "INFO", "COUNT", "GETKEYS", "LIST"
+                },
+                ["ACL"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "LIST", "WHOAMI", "GETUSER", "CAT", "LOG"
+                },
+                ["LATENCY"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    // RESET is excluded: it mutates the server's monitoring state.
+                    "HISTORY", "LATEST", "DOCTOR"
+                },
+                ["SLOWLOG"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "GET", "LEN"
+                },
+            };
+
+        /// <summary>
+        /// Decides whether a console command may run against a read-only connection.
+        /// Refuses anything that is not provably non-mutating, including SUBSCRIBE/MONITOR
+        /// (which hijack the connection) and EVAL/SCRIPT (which can write server-side).
+        /// </summary>
+        public static bool IsReadOnlyCommandAllowed(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) return false;
+
+            var parts = command.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return false;
+
+            string head = parts[0];
+            if (read_only_subcommands.TryGetValue(head, out var allowedSubs))
+            {
+                // CONFIG, CLIENT, ... are only safe when the subcommand is on the allow list.
+                return parts.Length > 1 && allowedSubs.Contains(parts[1]);
+            }
+
+            return read_only_commands.Contains(head);
+        }
+
         public static List<string> Sql_keyword_list
         {
             get
@@ -138,6 +245,19 @@ namespace RedisGuiManager
 
         public unsafe static bool RedisGlobMatch(char* pattern, int patternLen, char* str, int stringLen)
         {
+            // An empty key name is legal in Redis and "*" must match it. The loop below never runs
+            // when stringLen is 0, so handle that case up front.
+            if (stringLen == 0)
+            {
+                while (patternLen > 0 && *pattern == '*')
+                {
+                    pattern++;
+                    patternLen--;
+                }
+
+                return patternLen == 0;
+            }
+
             while (patternLen > 0 && stringLen > 0)
             {
                 switch (pattern[0])
@@ -316,112 +436,144 @@ namespace RedisGuiManager
             DarkThemeControls(form.Controls);
         }
 
-        public static void DarkThemeControl(Control control)
-        {
-            control.BackColor = DarkColors.GreyBackground;
-            control.ForeColor = DarkColors.LightText;
-            DarkThemeControls(control.Controls);
-        }
-
         public static void DarkThemeControls(Control.ControlCollection controls)
-        {
-            foreach (Control component in controls)
-            {
-                if (component is DataGridView)
                 {
+                    foreach (Control component in controls)
+                    {
+                        DarkThemeControl(component);
+                    }
+                }
+
+                public static void DarkThemeControl(Control component)
+                {
+                    if (component == null) return;
+
+                    if (component is DataGridView grid)
+                    {
+                        grid.EnableHeadersVisualStyles = false;
+                        grid.BackgroundColor = DarkColors.GreyHighlight;
+                        grid.BorderStyle = BorderStyle.None;
+                        grid.GridColor = DarkColors.GreySelection;
+                        grid.DefaultCellStyle.BackColor = DarkColors.GreyBackground;
+                        grid.DefaultCellStyle.ForeColor = DarkColors.LightText;
+                        grid.DefaultCellStyle.SelectionBackColor = DarkColors.GreySelection;
+                        grid.DefaultCellStyle.SelectionForeColor = Color.White;
+                        grid.AlternatingRowsDefaultCellStyle.BackColor = DarkColors.GreyBackground;
+                        grid.AlternatingRowsDefaultCellStyle.ForeColor = DarkColors.LightText;
+                        grid.ColumnHeadersDefaultCellStyle.BackColor = DarkColors.GreyBackground;
+                        grid.ColumnHeadersDefaultCellStyle.ForeColor = DarkColors.LightText;
+                        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = DarkColors.GreyBackground;
+                        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = DarkColors.LightText;
+                        grid.RowHeadersDefaultCellStyle.BackColor = DarkColors.GreyBackground;
+                        grid.RowHeadersDefaultCellStyle.ForeColor = DarkColors.LightText;
+                    }
+                    else if (component is ComboBox combo)
+                    {
+                        combo.FlatStyle = FlatStyle.Flat;
+                        combo.BackColor = DarkColors.GreyBackground;
+                        combo.ForeColor = DarkColors.LightText;
+                    }
+                    else if (component is NumericUpDown numeric)
+                                {
+                                    // UpDownBase keeps its spinner in an internal child control that paints the
+                                    // arrows with its own colours, so theme that child as well.
+                                    numeric.BackColor = DarkColors.GreyBackground;
+                                    numeric.ForeColor = DarkColors.LightText;
+                                    numeric.BorderStyle = BorderStyle.FixedSingle;
+                                    foreach (Control spinner in numeric.Controls)
+                                    {
+                                        spinner.BackColor = DarkColors.GreyBackground;
+                                        spinner.ForeColor = DarkColors.LightText;
+                                    }
+                                }
+                    else if (component is TabControl tabs)
+                    {
+                        tabs.DrawMode = TabDrawMode.OwnerDrawFixed;
+                        tabs.ForeColor = DarkColors.LightText;
+                        DarkThemeControls(tabs.Controls);
+                    }
+                    else if (component is TabPage tabPage)
+                    {
+                        tabPage.BackColor = DarkColors.GreyBackground;
+                        tabPage.ForeColor = DarkColors.LightText;
+                        DarkThemeControls(tabPage.Controls);
+                    }
+                    else if (component is ToolStrip strip)
+                                {
+                                    // ContextMenuStrip derives from ToolStrip, so this covers both.
+                                    strip.BackColor = DarkColors.GreyBackground;
+                                    strip.ForeColor = DarkColors.LightText;
+                                    DarkThemeToolStripItems(strip.Items);
+                                }
+                    else if (component is LinkLabel)
+                    {
+                        component.BackColor = DarkColors.GreyBackground;
+                        component.ForeColor = Color.LightBlue;
+                    }
+                    else if (component is Button button)
+                    {
+                        button.BackColor = DarkColors.GreyBackground;
+                        button.ForeColor = DarkColors.LightText;
+                        button.FlatStyle = FlatStyle.Flat;
+                        button.FlatAppearance.BorderColor = DarkColors.GreySelection;
+                    }
+                    else if (component is CheckBox checkBox)
+                    {
+                        checkBox.BackColor = DarkColors.GreyBackground;
+                        checkBox.ForeColor = DarkColors.LightText;
+                        checkBox.FlatStyle = FlatStyle.Flat;
+                        checkBox.FlatAppearance.BorderColor = DarkColors.LightText;
+                    }
+                    else if (component is RadioButton radio)
+                    {
+                        radio.BackColor = DarkColors.GreyBackground;
+                        radio.ForeColor = DarkColors.LightText;
+                        radio.FlatStyle = FlatStyle.Flat;
+                        radio.FlatAppearance.BorderColor = DarkColors.LightText;
+                    }
+                    else if (component is ProgressBar progress)
+                    {
+                        progress.BackColor = DarkColors.GreyBackground;
+                        progress.ForeColor = DarkColors.LightText;
+                    }
+                    else if (component is ListView listView)
+                    {
+                        listView.BackColor = DarkColors.GreyBackground;
+                        listView.ForeColor = DarkColors.LightText;
+                    }
+
+                    // Containers and everything not handled above still need the base colours,
+                    // otherwise labels/groups keep the light default background in dark mode.
                     component.BackColor = DarkColors.GreyBackground;
                     component.ForeColor = DarkColors.LightText;
-                    ((DataGridView)component).BackgroundColor = DarkColors.GreyHighlight;
-                    ((DataGridView)component).DefaultCellStyle.BackColor = DarkColors.GreyBackground;
-                    ((DataGridView)component).DefaultCellStyle.ForeColor = DarkColors.LightText;
-                    ((DataGridView)component).AlternatingRowsDefaultCellStyle.BackColor = DarkColors.GreyBackground;
-                    ((DataGridView)component).AlternatingRowsDefaultCellStyle.ForeColor = DarkColors.LightText;
+
+                    if (component is SplitContainer split)
+                    {
+                        DarkThemeControl(split.Panel1);
+                        DarkThemeControl(split.Panel2);
+                    }
+                    else
+                    {
+                        DarkThemeControls(component.Controls);
+                    }
                 }
-                else if (component is LinkLabel)
-                {
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = Color.LightBlue;
-                }
-                else if (component is UserControl)
-                {
-                    DarkThemeControls(component.Controls);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is Panel)
-                {
-                    DarkThemeControls(component.Controls);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is SplitContainer)
-                {
-                    DarkThemeControls(component.Controls);
-                    DarkThemeControl(((SplitContainer)component).Panel1);
-                    DarkThemeControl(((SplitContainer)component).Panel2);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is SplitterPanel)
-                {
-                    DarkThemeControls(component.Controls);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is TreeView)
-                {
-                    DarkThemeControls(component.Controls);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is StatusStrip)
-                {
-                    DarkThemeControls(component.Controls);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is TabControl)
-                {
-                    DarkThemeControls(component.Controls);
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is Button)
-                {
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                    ((Button)component).FlatStyle = FlatStyle.Flat;
-                    ((Button)component).FlatAppearance.BorderColor = DarkColors.GreySelection;
-                }
-                else if (component is CheckBox)
-                {
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                    ((CheckBox)component).FlatStyle = FlatStyle.Flat;
-                    ((CheckBox)component).FlatAppearance.BorderColor = DarkColors.LightText;
-                }
-                else if (component is TextBox)
-                {
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is RichTextBox)
-                {
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is SyntaxRichTextBox)
-                {
-                    component.BackColor = DarkColors.GreyBackground;
-                    component.ForeColor = DarkColors.LightText;
-                }
-                else if (component is ListBox)
-				{
-					component.BackColor = DarkColors.GreyBackground;
-					component.ForeColor = DarkColors.LightText;
-				}
-            }
-        }
+
+                private static void DarkThemeToolStripItems(ToolStripItemCollection items)
+                        {
+                            foreach (ToolStripItem item in items)
+                            {
+                                item.BackColor = DarkColors.GreyBackground;
+                                item.ForeColor = DarkColors.LightText;
+
+                                // ToolStripDropDownItem is the ToolStripItem subtype that owns a submenu.
+                                if (item is ToolStripDropDownItem dropDown)
+                                {
+                                    dropDown.BackColor = DarkColors.GreyBackground;
+                                    dropDown.ForeColor = DarkColors.LightText;
+                                    DarkThemeToolStripItems(dropDown.DropDownItems);
+                                }
+                            }
+                        }
     }
 
     public static class ExtensionMethods
