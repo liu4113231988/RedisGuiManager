@@ -282,6 +282,8 @@ namespace RedisGuiManager
             //
             // export_data_ToolStripMenuItem
             //
+            this.export_data_ToolStripMenuItem.Image = global::RedisGuiManager.Properties.Resources.Event_594_exp;
+            this.export_data_ToolStripMenuItem.ImageScaling = System.Windows.Forms.ToolStripItemImageScaling.None;
             this.export_data_ToolStripMenuItem.Name = "export_data_ToolStripMenuItem";
             this.export_data_ToolStripMenuItem.Size = new System.Drawing.Size(218, 24);
             this.export_data_ToolStripMenuItem.Text = "Export Data (JSON)";
@@ -289,6 +291,8 @@ namespace RedisGuiManager
             //
             // import_data_ToolStripMenuItem
             //
+            this.import_data_ToolStripMenuItem.Image = global::RedisGuiManager.Properties.Resources.Delegate_8339;
+            this.import_data_ToolStripMenuItem.ImageScaling = System.Windows.Forms.ToolStripItemImageScaling.None;
             this.import_data_ToolStripMenuItem.Name = "import_data_ToolStripMenuItem";
             this.import_data_ToolStripMenuItem.Size = new System.Drawing.Size(218, 24);
             this.import_data_ToolStripMenuItem.Text = "Import Data (JSON)";
