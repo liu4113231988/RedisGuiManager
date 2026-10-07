@@ -12,6 +12,7 @@ using System.Xml;
 using System.Xml.Linq;
 using StackExchange.Redis;
 using System.IO;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -44,7 +45,7 @@ namespace RedisGuiManager
         public bool ConfirmDiscard()
         {
             if (!IsDirty) return true;
-            if (MessageBox.Show(this, "Discard unsaved edits?", "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return false;
+            if (MessageBox.Show(this, UiText.DiscardUnsavedPrompt, UiText.UnsavedChangesTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return false;
             DiscardOtherChanges?.Invoke();
             AcceptChanges();
             return true;
@@ -177,7 +178,7 @@ namespace RedisGuiManager
             {
                 shownType = dpType;
                 int size = (int)value.Length();
-                label_size.Text = "Size : " + Utils.GetSizeDescription(size);
+                label_size.Text = UiText.SizePrefix + Utils.GetSizeDescription(size);
 
                 if (radioButton_display_type_text.Checked)
                 {

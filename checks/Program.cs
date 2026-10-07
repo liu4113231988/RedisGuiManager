@@ -265,6 +265,14 @@ static class RegressionChecks
             args = new object[] { temp, 0, null };
             accepted = (bool)inspect.Invoke(null, args);
             Check(accepted && (int)args[1] == 3, $"Expected 3 entries, counted {(int)args[1]}");
+
+            // An entry's "value" may itself hold objects (Hash fields, Sorted Set members, Stream
+            // entries). Only the array's direct children are entries; nested objects must not inflate
+            // the count, or a valid file could be refused by the entry limit.
+            File.WriteAllText(temp, "[{\"key\":\"h\",\"type\":\"Hash\",\"value\":[{\"field\":\"f1\",\"value\":\"v1\"},{\"field\":\"f2\",\"value\":\"v2\"}]},{\"key\":\"s\",\"type\":\"Stream\",\"value\":[{\"id\":\"0-0\",\"fields\":[{\"name\":\"n\",\"value\":\"v\"}]}]}]");
+            args = new object[] { temp, 0, null };
+            accepted = (bool)inspect.Invoke(null, args);
+            Check(accepted && (int)args[1] == 2, $"Nested value objects were counted as entries (counted {(int)args[1]})");
         }
         finally
         {

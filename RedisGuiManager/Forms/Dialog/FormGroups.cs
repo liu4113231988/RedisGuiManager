@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -67,7 +68,7 @@ namespace RedisGuiManager
                 groups.Add(edit);
             }
 
-            Text = "Connection groups";
+            Text = UiText.GroupsWindowTitle;
             Icon = Icon.FromHandle(Properties.Resources.action_add_16xLG.GetHicon());
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(760, 620);
@@ -141,7 +142,7 @@ namespace RedisGuiManager
                 Dock = DockStyle.Top,
                 Height = 34,
                 Padding = new Padding(10, 8, 0, 0),
-                Text = "A connection can belong to one group only. Clearing it here moves it back to the top level."
+                Text = UiText.GroupsHint
             };
 
             var split = new SplitContainer
@@ -151,14 +152,14 @@ namespace RedisGuiManager
                 SplitterDistance = 210
             };
 
-            groupGrid = MakeGrid(false, ("Group", 420), ("Connections", 110));
+            groupGrid = MakeGrid(false, (UiText.GroupsColumnGroup, 420), (UiText.GroupsColumnConnections, 110));
             groupGrid.SelectionChanged += (s, e) => RefreshMembers();
             split.Panel1.Controls.Add(groupGrid);
 
             var memberButtons = new Panel { Dock = DockStyle.Bottom, Height = 34 };
-            memberButtons.Controls.Add(MakeButton("Add existing connection…", (s, e) => AddConnectionToGroup(), 190));
+            memberButtons.Controls.Add(MakeButton(UiText.GroupsAddExisting, (s, e) => AddConnectionToGroup(), 190));
 
-            memberGrid = MakeGrid(true, ("In group", 90), ("Connection", 300), ("Endpoint", 160));
+            memberGrid = MakeGrid(true, (UiText.GroupsColumnInGroup, 90), (UiText.GroupsColumnConnection, 300), (UiText.GroupsColumnEndpoint, 160));
             memberGrid.CurrentCellDirtyStateChanged += (s, e) =>
             {
                 // Commit the checkbox straight away so the click is not lost on cell change.
@@ -172,19 +173,19 @@ namespace RedisGuiManager
             split.Panel2.Controls.Add(memberButtons);
 
             var groupButtons = new Panel { Dock = DockStyle.Bottom, Height = 34 };
-            groupButtons.Controls.Add(MakeButton("New group", (s, e) => AddGroup(), 100));
-            var rename = MakeButton("Rename", (s, e) => RenameGroup(), 100);
+            groupButtons.Controls.Add(MakeButton(UiText.GroupsNewGroup, (s, e) => AddGroup(), 100));
+            var rename = MakeButton(UiText.GroupsRename, (s, e) => RenameGroup(), 100);
             rename.Location = new Point(108, 0);
             groupButtons.Controls.Add(rename);
-            var remove = MakeButton("Delete", (s, e) => DeleteGroup(), 100);
+            var remove = MakeButton(UiText.Delete, (s, e) => DeleteGroup(), 100);
             remove.Location = new Point(216, 0);
             groupButtons.Controls.Add(remove);
             split.Panel1.Controls.Add(groupButtons);
 
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 42 };
-            var ok = MakeButton("Save", (s, e) => { DialogResult = DialogResult.OK; Close(); }, 100);
+            var ok = MakeButton(UiText.GroupsSave, (s, e) => { DialogResult = DialogResult.OK; Close(); }, 100);
             ok.Location = new Point(10, 8);
-            var cancel = MakeButton("Cancel", (s, e) => Close(), 100);
+            var cancel = MakeButton(UiText.GroupsCancel, (s, e) => Close(), 100);
             cancel.Location = new Point(120, 8);
             bottom.Controls.Add(ok);
             bottom.Controls.Add(cancel);
@@ -235,19 +236,19 @@ namespace RedisGuiManager
 
         private void AddGroup()
         {
-            using var input = new FormInputString { TextInfo = "Group name", InputValue = "" };
+            using var input = new FormInputString { TextInfo = UiText.GroupsNamePrompt, InputValue = "" };
             if (input.ShowDialog(this) != DialogResult.OK) return;
 
             string name = input.InputValue?.Trim();
             if (string.IsNullOrEmpty(name))
             {
-                MessageBox.Show(this, "Group name can not be empty.", "New group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, UiText.GroupsNameEmpty, UiText.GroupsNewGroupTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (groups.Any(g => !g.Removed && string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
-                MessageBox.Show(this, $"A group named \"{name}\" already exists.", "New group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, string.Format(UiText.GroupsNameExistsFormat, name), UiText.GroupsNewGroupTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -271,23 +272,23 @@ namespace RedisGuiManager
             GroupEdit group = SelectedGroup();
             if (group == null)
             {
-                MessageBox.Show(this, "Select a group first.", "Rename group", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, UiText.GroupsSelectFirst, UiText.GroupsRenameTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            using var input = new FormInputString { TextInfo = "Group name", InputValue = group.Name };
+            using var input = new FormInputString { TextInfo = UiText.GroupsNamePrompt, InputValue = group.Name };
             if (input.ShowDialog(this) != DialogResult.OK) return;
 
             string name = input.InputValue?.Trim();
             if (string.IsNullOrEmpty(name))
             {
-                MessageBox.Show(this, "Group name can not be empty.", "Rename group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, UiText.GroupsNameEmpty, UiText.GroupsRenameTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (groups.Any(g => !g.Removed && !ReferenceEquals(g, group) && string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
-                MessageBox.Show(this, $"A group named \"{name}\" already exists.", "Rename group", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, string.Format(UiText.GroupsNameExistsFormat, name), UiText.GroupsRenameTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -301,16 +302,16 @@ namespace RedisGuiManager
             GroupEdit group = SelectedGroup();
             if (group == null)
             {
-                MessageBox.Show(this, "Select a group first.", "Delete group", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, UiText.GroupsSelectFirst, UiText.GroupsDeleteTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             int count = group.Members.Count;
             string warning = count == 0
-                ? $"Delete the group \"{group.Name}\"?\r\n\r\nIt is empty, so nothing else changes."
-                : $"Delete the group \"{group.Name}\"?\r\n\r\nIts {count} connection(s) are kept and move back to the top level.";
+                ? string.Format(UiText.GroupsDeleteEmptyFormat, group.Name)
+                : string.Format(UiText.GroupsDeleteWithMembersFormat, group.Name, count);
 
-            if (MessageBox.Show(this, warning, "Delete group", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            if (MessageBox.Show(this, warning, UiText.GroupsDeleteTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             {
                 return;
             }
@@ -325,7 +326,7 @@ namespace RedisGuiManager
             GroupEdit group = SelectedGroup();
             if (group == null)
             {
-                MessageBox.Show(this, "Select a group first.", "Add connection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, UiText.GroupsSelectFirst, UiText.GroupsAddConnectionTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -338,7 +339,7 @@ namespace RedisGuiManager
 
             if (candidates.Count == 0)
             {
-                MessageBox.Show(this, "Every connection is already in this group.", "Add connection",
+                MessageBox.Show(this, UiText.GroupsAllAlreadyMembers, UiText.GroupsAddConnectionTitle,
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -365,14 +366,14 @@ namespace RedisGuiManager
 
             public FormPickConnection(IReadOnlyList<ConnectionEdit> candidates)
             {
-                Text = "Add connection";
+                Text = UiText.GroupsAddConnectionTitle;
                 FormBorderStyle = FormBorderStyle.FixedDialog;
                 StartPosition = FormStartPosition.CenterParent;
                 ClientSize = new Size(360, 150);
                 MaximizeBox = false;
                 MinimizeBox = false;
 
-                var label = new Label { Text = "Connection to add", Location = new Point(12, 18), AutoSize = true };
+                var label = new Label { Text = UiText.GroupsConnectionToAdd, Location = new Point(12, 18), AutoSize = true };
                 picker = new ComboBox
                 {
                     Location = new Point(12, 42),
@@ -386,8 +387,8 @@ namespace RedisGuiManager
 
                 if (picker.Items.Count > 0) picker.SelectedIndex = 0;
 
-                var ok = new Button { Text = "Add", Location = new Point(160, 108), Width = 85, DialogResult = DialogResult.OK };
-                var cancel = new Button { Text = "Cancel", Location = new Point(255, 108), Width = 85, DialogResult = DialogResult.Cancel };
+                var ok = new Button { Text = UiText.GroupsAdd, Location = new Point(160, 108), Width = 85, DialogResult = DialogResult.OK };
+                var cancel = new Button { Text = UiText.GroupsCancel, Location = new Point(255, 108), Width = 85, DialogResult = DialogResult.Cancel };
                 Controls.Add(label);
                 Controls.Add(picker);
                 Controls.Add(ok);

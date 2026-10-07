@@ -395,4 +395,524 @@
   <data name="LoadServerInfoFailed" xml:space="preserve">
     <value>加载服务器信息失败\r\n</value>
   </data>
+  <data name="ReportSummaryCompleted" xml:space="preserve">
+    <value>已完成 · 成功：{0} · 跳过：{1} · 失败：{2}</value>
+  </data>
+  <data name="ReportSummaryCanceled" xml:space="preserve">
+    <value>已取消；已完成的修改保留 · 成功：{0} · 跳过：{1} · 失败：{2}</value>
+  </data>
+  <data name="ReportSaveFull" xml:space="preserve">
+    <value>保存完整报告...</value>
+  </data>
+  <data name="ReportSaveFailed" xml:space="preserve">
+    <value>报告保存失败</value>
+  </data>
+  <data name="ReportSaveFilter" xml:space="preserve">
+    <value>文本文件 (*.txt)|*.txt</value>
+  </data>
+  <data name="ReportSaveFileName" xml:space="preserve">
+    <value>redis_operation_report.txt</value>
+  </data>
+  <data name="JsonFileFilter" xml:space="preserve">
+    <value>JSON 文件 (*.json)|*.json</value>
+  </data>
+  <data name="KeyedMessageFormat" xml:space="preserve">
+    <value>{0}：{1}</value>
+  </data>
+  <data name="ExportDataTitle" xml:space="preserve">
+    <value>导出数据</value>
+  </data>
+  <data name="ExportPartialSaved" xml:space="preserve">
+    <value>已保存部分导出结果</value>
+  </data>
+  <data name="ExportCanceledUnchanged" xml:space="preserve">
+    <value>导出已取消；文件未改动</value>
+  </data>
+  <data name="ExportResultTitle" xml:space="preserve">
+    <value>导出结果</value>
+  </data>
+  <data name="ExportProgressFormat" xml:space="preserve">
+    <value>已导出 {0} 个键；失败 {1} 个</value>
+  </data>
+  <data name="ExportFileNameFormat" xml:space="preserve">
+    <value>redis_export_db{0}.json</value>
+  </data>
+  <data name="ImportDataTitle" xml:space="preserve">
+    <value>导入数据</value>
+  </data>
+  <data name="ImportResultTitle" xml:space="preserve">
+    <value>导入结果</value>
+  </data>
+  <data name="ImportInvalidTitle" xml:space="preserve">
+    <value>导入文件无效</value>
+  </data>
+  <data name="ImportCannotImportFormat" xml:space="preserve">
+    <value>{0} 无法导入。
+
+{1}</value>
+  </data>
+  <data name="ImportNothingTitle" xml:space="preserve">
+    <value>没有可导入的内容</value>
+  </data>
+  <data name="ImportNoEntriesFormat" xml:space="preserve">
+    <value>{0} 中没有可导入的条目。</value>
+  </data>
+  <data name="ConfirmImportTitle" xml:space="preserve">
+    <value>确认导入</value>
+  </data>
+  <data name="ImportConfirmFormat" xml:space="preserve">
+    <value>从 {1}（{2} [{3}:{4}]）导入 {0} 个条目到 DB {5}？
+
+已存在的键会被跳过；取消时已完成的导入保留。</value>
+  </data>
+  <data name="ImportExpectedArray" xml:space="preserve">
+    <value>需要由条目组成的 JSON 数组</value>
+  </data>
+  <data name="ImportEntryNotObjectFormat" xml:space="preserve">
+    <value>第 {0} 个条目：不是 JSON 对象（{1}）</value>
+  </data>
+  <data name="ImportEntryExpectedObjectFormat" xml:space="preserve">
+    <value>第 {0} 个条目：应为 JSON 对象，实际为 {1}</value>
+  </data>
+  <data name="ImportNoKeyField" xml:space="preserve">
+    <value>缺少 "key" 字段</value>
+  </data>
+  <data name="ImportKeyLabelFormat" xml:space="preserve">
+    <value>键 "{0}"</value>
+  </data>
+  <data name="ImportEntryErrorFormat" xml:space="preserve">
+    <value>第 {0} 个条目（{1}）：{2}</value>
+  </data>
+  <data name="ImportEntryRejectedFormat" xml:space="preserve">
+    <value>第 {0} 个条目（{1}）：服务器拒绝 - {2}</value>
+  </data>
+  <data name="ImportUnexpectedEnd" xml:space="preserve">
+    <value>JSON 文件意外结束；仅导入了已完成的条目</value>
+  </data>
+  <data name="ImportInvalidJsonFormat" xml:space="preserve">
+    <value>JSON 无效：{0}</value>
+  </data>
+  <data name="ImportProgressFormat" xml:space="preserve">
+    <value>已处理 {0}：导入 {1}，跳过 {2}，失败 {3}</value>
+  </data>
+  <data name="ImportFileMissing" xml:space="preserve">
+    <value>文件已不存在。</value>
+  </data>
+  <data name="ImportFileEmpty" xml:space="preserve">
+    <value>文件为空。</value>
+  </data>
+  <data name="ImportFileTooLargeFormat" xml:space="preserve">
+    <value>文件超过 {0} MB 的导入上限。</value>
+  </data>
+  <data name="ImportFileNoJson" xml:space="preserve">
+    <value>文件中没有 JSON 内容。</value>
+  </data>
+  <data name="ImportFileNotArrayFormat" xml:space="preserve">
+    <value>需要由条目组成的 JSON 数组，但文件以 {0} 开始。</value>
+  </data>
+  <data name="ImportFileTooManyEntriesFormat" xml:space="preserve">
+    <value>文件条目数超过 {0} 的导入上限。</value>
+  </data>
+  <data name="ImportFileTruncated" xml:space="preserve">
+    <value>文件在结束的 ] 之前中断，可能已截断或不完整。</value>
+  </data>
+  <data name="ImportFileInvalidJsonFormat" xml:space="preserve">
+    <value>文件不是有效的 JSON：{0}</value>
+  </data>
+  <data name="ImportFileUnreadableFormat" xml:space="preserve">
+    <value>无法读取文件：{0}</value>
+  </data>
+  <data name="ImportMissingKey" xml:space="preserve">
+    <value>缺少 "key" 字段</value>
+  </data>
+  <data name="ImportEmptyKey" xml:space="preserve">
+    <value>"key" 字段为空</value>
+  </data>
+  <data name="ImportRecordedErrorFormat" xml:space="preserve">
+    <value>导出记录中该键存在错误{0}</value>
+  </data>
+  <data name="ImportDumpNotBase64Format" xml:space="preserve">
+    <value>"dump" 字段不是有效的 Base64{0}</value>
+  </data>
+  <data name="ImportMissingPttlFormat" xml:space="preserve">
+    <value>缺少 "dump" 所需的 "pttl" 字段{0}</value>
+  </data>
+  <data name="ImportPttlNotNumberFormat" xml:space="preserve">
+    <value>"pttl" 字段不是数字{0}</value>
+  </data>
+  <data name="ImportPttlOutOfRangeFormat" xml:space="preserve">
+    <value>"pttl" 字段为 {0}，只允许 -1 或毫秒值{1}</value>
+  </data>
+  <data name="ImportNoDumpOrValueFormat" xml:space="preserve">
+    <value>条目既无 "dump" 也无 "value"{0}</value>
+  </data>
+  <data name="ImportStringExpectedTextFormat" xml:space="preserve">
+    <value>String 键需要文本值，实际为 {0}{1}</value>
+  </data>
+  <data name="ImportHashMissingFieldFormat" xml:space="preserve">
+    <value>某个 Hash 项缺少 "field"{0}</value>
+  </data>
+  <data name="ImportHashMissingValueFormat" xml:space="preserve">
+    <value>某个 Hash 项缺少 "value"{0}</value>
+  </data>
+  <data name="ImportCollectionExpectedTextFormat" xml:space="preserve">
+    <value>{0} 键需要文本成员，实际为 {1}{2}</value>
+  </data>
+  <data name="ImportScoreNotFiniteFormat" xml:space="preserve">
+    <value>某个有序集合分数不是有限数字{0}</value>
+  </data>
+  <data name="ImportMissingMemberFormat" xml:space="preserve">
+    <value>某个有序集合项缺少 "member"{0}</value>
+  </data>
+  <data name="ImportStreamMissingIdFormat" xml:space="preserve">
+    <value>某个 Stream 条目缺少 "id"{0}</value>
+  </data>
+  <data name="ImportStreamIdNotIncreasingFormat" xml:space="preserve">
+    <value>Stream ID 必须合法且递增，实际为 "{0}"{1}</value>
+  </data>
+  <data name="ImportStreamMissingFieldsFormat" xml:space="preserve">
+    <value>Stream 条目 {0} 缺少 "fields" 数组{1}</value>
+  </data>
+  <data name="ImportStreamFieldMissingNameFormat" xml:space="preserve">
+    <value>某个 Stream 字段缺少 "name"{0}</value>
+  </data>
+  <data name="ImportStreamFieldMissingValueFormat" xml:space="preserve">
+    <value>某个 Stream 字段缺少 "value"{0}</value>
+  </data>
+  <data name="ImportStreamNoFieldsFormat" xml:space="preserve">
+    <value>Stream 条目 {0} 没有字段{1}</value>
+  </data>
+  <data name="ImportMissingTypeFormat" xml:space="preserve">
+    <value>条目有值但缺少 "type" 字段{0}</value>
+  </data>
+  <data name="ImportUnsupportedTypeFormat" xml:space="preserve">
+    <value>不支持的类型 "{0}"{1}</value>
+  </data>
+  <data name="ImportEmptyValueFormat" xml:space="preserve">
+    <value>空的 {0} 无法还原{1}</value>
+  </data>
+  <data name="ImportTtlNotNumberFormat" xml:space="preserve">
+    <value>"ttl" 字段不是数字{0}</value>
+  </data>
+  <data name="ImportTtlOutOfRangeFormat" xml:space="preserve">
+    <value>"ttl" 字段超出范围{0}</value>
+  </data>
+  <data name="GroupsWindowTitle" xml:space="preserve">
+    <value>连接分组</value>
+  </data>
+  <data name="GroupsHint" xml:space="preserve">
+    <value>一个连接只能属于一个分组；在此取消勾选会把它移回顶层。</value>
+  </data>
+  <data name="GroupsColumnGroup" xml:space="preserve">
+    <value>分组</value>
+  </data>
+  <data name="GroupsColumnConnections" xml:space="preserve">
+    <value>连接数</value>
+  </data>
+  <data name="GroupsColumnInGroup" xml:space="preserve">
+    <value>在分组中</value>
+  </data>
+  <data name="GroupsColumnConnection" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="GroupsColumnEndpoint" xml:space="preserve">
+    <value>地址</value>
+  </data>
+  <data name="GroupsAddExisting" xml:space="preserve">
+    <value>添加已有连接...</value>
+  </data>
+  <data name="GroupsNewGroup" xml:space="preserve">
+    <value>新建分组</value>
+  </data>
+  <data name="GroupsRename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="GroupsSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="GroupsCancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="GroupsNamePrompt" xml:space="preserve">
+    <value>分组名称</value>
+  </data>
+  <data name="GroupsNameEmpty" xml:space="preserve">
+    <value>分组名称不能为空。</value>
+  </data>
+  <data name="GroupsNameExistsFormat" xml:space="preserve">
+    <value>已存在名为 "{0}" 的分组。</value>
+  </data>
+  <data name="GroupsSelectFirst" xml:space="preserve">
+    <value>请先选择一个分组。</value>
+  </data>
+  <data name="GroupsDeleteEmptyFormat" xml:space="preserve">
+    <value>删除分组 "{0}"？
+
+该分组为空，不会影响其他内容。</value>
+  </data>
+  <data name="GroupsDeleteWithMembersFormat" xml:space="preserve">
+    <value>删除分组 "{0}"？
+
+其 {1} 个连接会保留并移回顶层。</value>
+  </data>
+  <data name="GroupsAddConnectionTitle" xml:space="preserve">
+    <value>添加连接</value>
+  </data>
+  <data name="GroupsAllAlreadyMembers" xml:space="preserve">
+    <value>所有连接都已在该分组中。</value>
+  </data>
+  <data name="GroupsConnectionToAdd" xml:space="preserve">
+    <value>要添加的连接</value>
+  </data>
+  <data name="GroupsAdd" xml:space="preserve">
+    <value>添加</value>
+  </data>
+  <data name="GroupsNewGroupTitle" xml:space="preserve">
+    <value>新建分组</value>
+  </data>
+  <data name="GroupsRenameTitle" xml:space="preserve">
+    <value>重命名分组</value>
+  </data>
+  <data name="GroupsDeleteTitle" xml:space="preserve">
+    <value>删除分组</value>
+  </data>
+  <data name="StringToolsTitle" xml:space="preserve">
+    <value>字符串工具（位图 / HyperLogLog / LCS）</value>
+  </data>
+  <data name="StringToolsStart" xml:space="preserve">
+    <value>起始：</value>
+  </data>
+  <data name="StringToolsEnd" xml:space="preserve">
+    <value>结束：</value>
+  </data>
+  <data name="StringToolsIndexByBit" xml:space="preserve">
+    <value>按位索引</value>
+  </data>
+  <data name="StringToolsBit" xml:space="preserve">
+    <value>位：</value>
+  </data>
+  <data name="StringToolsOtherKey" xml:space="preserve">
+    <value>另一个键：</value>
+  </data>
+  <data name="StringToolsClear" xml:space="preserve">
+    <value>清空</value>
+  </data>
+  <data name="StringToolsRangeNotIntegers" xml:space="preserve">
+    <value>起始和结束必须为整数</value>
+  </data>
+  <data name="StringToolsBitMustBeZeroOrOne" xml:space="preserve">
+    <value>位必须为 0 或 1</value>
+  </data>
+  <data name="StringToolsNoBitFoundFormat" xml:space="preserve">
+    <value>[{1}..{2}] 内没有 {0}</value>
+  </data>
+  <data name="StringToolsFirstBitAtFormat" xml:space="preserve">
+    <value>第一个 {0} 位于偏移 {1}</value>
+  </data>
+  <data name="StringToolsBitCountFormat" xml:space="preserve">
+    <value>[{1}..{2}] 内共有 {0} 个置位（按{3}索引）</value>
+  </data>
+  <data name="StringToolsByteIndexed" xml:space="preserve">
+    <value>字节</value>
+  </data>
+  <data name="StringToolsBitIndexed" xml:space="preserve">
+    <value>位</value>
+  </data>
+  <data name="StringToolsGetRangeFormat" xml:space="preserve">
+    <value>{0} 字节：{1}</value>
+  </data>
+  <data name="StringToolsRangeTruncatedFormat" xml:space="preserve">
+    <value>... [还有 {0} 个字符]</value>
+  </data>
+  <data name="StringToolsPfCountFormat" xml:space="preserve">
+    <value>估算 {0} 个不重复元素</value>
+  </data>
+  <data name="StringToolsEnterOtherKey" xml:space="preserve">
+    <value>请先在"另一个键"中填写键名</value>
+  </data>
+  <data name="StringToolsConfirmPfMergeTitle" xml:space="preserve">
+    <value>确认 PFMERGE</value>
+  </data>
+  <data name="StringToolsConfirmPfMergeFormat" xml:space="preserve">
+    <value>将 [{0}] 合并到 [{1}]？
+
+这会同时修改两个键，且无法在此撤销。</value>
+  </data>
+  <data name="StringToolsPfMergeResultFormat" xml:space="preserve">
+    <value>已合并到 {0}；现有 {1} 个不重复元素</value>
+  </data>
+  <data name="StringToolsNoCommonSubsequence" xml:space="preserve">
+    <value>无公共子序列</value>
+  </data>
+  <data name="StringToolsLcsFormat" xml:space="preserve">
+    <value>共有 {0} 个公共字符</value>
+  </data>
+  <data name="StringToolsFailedFormat" xml:space="preserve">
+    <value>{0}：失败 - {1}</value>
+  </data>
+  <data name="PubSubTitle" xml:space="preserve">
+    <value>发布/订阅</value>
+  </data>
+  <data name="PubSubWindowTitleFormat" xml:space="preserve">
+    <value>发布/订阅 - {0} [{1}:{2}]</value>
+  </data>
+  <data name="PubSubSubscriptionsFormat" xml:space="preserve">
+    <value>订阅数：{0}</value>
+  </data>
+  <data name="PubSubAlreadySubscribedFormat" xml:space="preserve">
+    <value>已订阅 [{0}]</value>
+  </data>
+  <data name="PubSubPatternSuffix" xml:space="preserve">
+    <value>{0}  （模式）</value>
+  </data>
+  <data name="PubSubKeyspaceButton" xml:space="preserve">
+    <value>监视键空间事件</value>
+  </data>
+  <data name="PubSubKeyspaceChannelLabel" xml:space="preserve">
+    <value>__keyspace@*__:key  （键空间通知）</value>
+  </data>
+  <data name="PubSubKeyspaceDbFormat" xml:space="preserve">
+    <value>{0}  （db{1}）</value>
+  </data>
+  <data name="PubSubKeyspaceTitle" xml:space="preserve">
+    <value>键空间通知</value>
+  </data>
+  <data name="PubSubKeyspaceInfo" xml:space="preserve">
+    <value>正在监视所有数据库的键空间通知。
+
+只有在服务器启用了 notify-keyspace-events 时才会收到事件（例如：CONFIG SET notify-keyspace-events "KEA"）。</value>
+  </data>
+  <data name="PubSubPublishedFormat" xml:space="preserve">
+    <value>已发布到 {0}，{1} 个接收者</value>
+  </data>
+  <data name="PubSubDroppedFormat" xml:space="preserve">
+    <value>显示 {0} 条 · 已丢弃 {1:N0} 条较旧消息</value>
+  </data>
+  <data name="PubSubMessageTruncatedFormat" xml:space="preserve">
+    <value>... [已截断 {0:N0} 个字符]</value>
+  </data>
+  <data name="PagerPrevious" xml:space="preserve">
+    <value>上一页</value>
+  </data>
+  <data name="PagerNext" xml:space="preserve">
+    <value>下一页</value>
+  </data>
+  <data name="PagerPageFormat" xml:space="preserve">
+    <value>第 {0} 页 · 搜索仅作用于本页</value>
+  </data>
+  <data name="DiscardUnsavedPrompt" xml:space="preserve">
+    <value>放弃未保存的修改？</value>
+  </data>
+  <data name="UnsavedChangesTitle" xml:space="preserve">
+    <value>未保存的修改</value>
+  </data>
+  <data name="MainWindowTitle" xml:space="preserve">
+    <value>Redis Gui Manager</value>
+  </data>
+  <data name="MainWindowTitleWithNameFormat" xml:space="preserve">
+    <value>Redis Gui Manager ({0})</value>
+  </data>
+  <data name="ConnectionsLoadedFormat" xml:space="preserve">
+    <value>已从 {1} 个文件加载 {0} 个连接</value>
+  </data>
+  <data name="ConnectionsGroupsUpdatedFormat" xml:space="preserve">
+    <value>分组已更新：{0} 个分组，{1} 个未分组连接</value>
+  </data>
+  <data name="ConnectionsJsonErrorFormat" xml:space="preserve">
+    <value>JSON 格式错误：{0}</value>
+  </data>
+  <data name="ConnectionsSkippedEntryFormat" xml:space="preserve">
+    <value>{0}：已跳过没有名称和主机的条目</value>
+  </data>
+  <data name="ConnectionLoadFailedFormat" xml:space="preserve">
+    <value>加载失败：{0} - {1}</value>
+  </data>
+  <data name="ConnectionStatusFormat" xml:space="preserve">
+    <value>{0}：{1}</value>
+  </data>
+  <data name="ConnectionStatusReadOnlyFormat" xml:space="preserve">
+    <value>{0}：{1} · 只读</value>
+  </data>
+  <data name="SelectDbFailedFormat" xml:space="preserve">
+    <value>选择 [{0}] 的 DB {1} 失败</value>
+  </data>
+  <data name="KeyNotExistFormat" xml:space="preserve">
+    <value>键 {0} 不存在</value>
+  </data>
+  <data name="RedisRequestFailedTitle" xml:space="preserve">
+    <value>Redis 请求失败</value>
+  </data>
+  <data name="RedisReloadHint" xml:space="preserve">
+    <value>重新加载连接以重试。</value>
+  </data>
+  <data name="ConnectFailedDetailFormat" xml:space="preserve">
+    <value>连接 redis[{0}] 失败 IpAddress:{1} Port:{2}</value>
+  </data>
+  <data name="LoadKeysTitle" xml:space="preserve">
+    <value>加载键</value>
+  </data>
+  <data name="ConnectTitle" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="KeyScanFailedTitle" xml:space="preserve">
+    <value>键扫描失败</value>
+  </data>
+  <data name="KeyScanPausedStatus" xml:space="preserve">
+    <value>键扫描已暂停；使用"加载下一批"继续</value>
+  </data>
+  <data name="KeyScanFailedDetailFormat" xml:space="preserve">
+    <value>{0}
+已加载的键保留；重新加载可重试。</value>
+  </data>
+  <data name="LoadNextKeysLabel" xml:space="preserve">
+    <value>加载下 500 个键...</value>
+  </data>
+  <data name="KeyCountFailedFormat" xml:space="preserve">
+    <value>无法读取 db{0} 的键数量，服务器可能不可达。</value>
+  </data>
+  <data name="KeyStatusFormat" xml:space="preserve">
+    <value>{0} · DB {1} · {2} {3}</value>
+  </data>
+  <data name="ConnectedStatus" xml:space="preserve">
+    <value>已连接</value>
+  </data>
+  <data name="DisconnectedStatus" xml:space="preserve">
+    <value>已断开</value>
+  </data>
+  <data name="ReadOnlyStatusSuffix" xml:space="preserve">
+    <value>· 只读</value>
+  </data>
+  <data name="KeyHasNoTtl" xml:space="preserve">
+    <value>该键没有 TTL（永久）。</value>
+  </data>
+  <data name="KeyDoesNotExist" xml:space="preserve">
+    <value>该键不存在。</value>
+  </data>
+  <data name="SetTtlPromptDetailed" xml:space="preserve">
+    <value>设置 TTL（秒），-1 表示永久，0 表示立即删除</value>
+  </data>
+  <data name="PermanentNoTtl" xml:space="preserve">
+    <value>永久（无 TTL）</value>
+  </data>
+  <data name="Permanent" xml:space="preserve">
+    <value>永久</value>
+  </data>
+  <data name="StatusConnecting" xml:space="preserve">
+    <value>正在连接…</value>
+  </data>
+  <data name="StatusDisconnectedReconnecting" xml:space="preserve">
+    <value>已断开；正在重连…</value>
+  </data>
+  <data name="StatusNotConnected" xml:space="preserve">
+    <value>未连接</value>
+  </data>
+  <data name="StatusServerUnavailable" xml:space="preserve">
+    <value>服务器不可用</value>
+  </data>
+  <data name="StatusClusterDbZeroOnly" xml:space="preserve">
+    <value>集群模式仅支持 DB 0</value>
+  </data>
+  <data name="StatusClusterPrimariesDisconnected" xml:space="preserve">
+    <value>集群主节点未全部连接</value>
+  </data>
 </root>

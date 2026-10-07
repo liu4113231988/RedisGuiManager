@@ -657,4 +657,524 @@ The key may not exist or already has no TTL.</value>
   <data name="LoadServerInfoFailed" xml:space="preserve">
     <value>Failed to load server info\r\n</value>
   </data>
+  <data name="ReportSummaryCompleted" xml:space="preserve">
+    <value>Completed · Success: {0} · Skipped: {1} · Failed: {2}</value>
+  </data>
+  <data name="ReportSummaryCanceled" xml:space="preserve">
+    <value>Canceled; completed changes remain · Success: {0} · Skipped: {1} · Failed: {2}</value>
+  </data>
+  <data name="ReportSaveFull" xml:space="preserve">
+    <value>Save full report...</value>
+  </data>
+  <data name="ReportSaveFailed" xml:space="preserve">
+    <value>Report save failed</value>
+  </data>
+  <data name="ReportSaveFilter" xml:space="preserve">
+    <value>Text files (*.txt)|*.txt</value>
+  </data>
+  <data name="ReportSaveFileName" xml:space="preserve">
+    <value>redis_operation_report.txt</value>
+  </data>
+  <data name="JsonFileFilter" xml:space="preserve">
+    <value>JSON files (*.json)|*.json</value>
+  </data>
+  <data name="KeyedMessageFormat" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="ExportDataTitle" xml:space="preserve">
+    <value>Export data</value>
+  </data>
+  <data name="ExportPartialSaved" xml:space="preserve">
+    <value>Partial export saved</value>
+  </data>
+  <data name="ExportCanceledUnchanged" xml:space="preserve">
+    <value>Export canceled; file unchanged</value>
+  </data>
+  <data name="ExportResultTitle" xml:space="preserve">
+    <value>Export result</value>
+  </data>
+  <data name="ExportProgressFormat" xml:space="preserve">
+    <value>Exported {0} keys; failed {1}</value>
+  </data>
+  <data name="ExportFileNameFormat" xml:space="preserve">
+    <value>redis_export_db{0}.json</value>
+  </data>
+  <data name="ImportDataTitle" xml:space="preserve">
+    <value>Import data</value>
+  </data>
+  <data name="ImportResultTitle" xml:space="preserve">
+    <value>Import result</value>
+  </data>
+  <data name="ImportInvalidTitle" xml:space="preserve">
+    <value>Invalid import file</value>
+  </data>
+  <data name="ImportCannotImportFormat" xml:space="preserve">
+    <value>{0} cannot be imported.
+
+{1}</value>
+  </data>
+  <data name="ImportNothingTitle" xml:space="preserve">
+    <value>Nothing to import</value>
+  </data>
+  <data name="ImportNoEntriesFormat" xml:space="preserve">
+    <value>{0} contains no entries to import.</value>
+  </data>
+  <data name="ConfirmImportTitle" xml:space="preserve">
+    <value>Confirm import</value>
+  </data>
+  <data name="ImportConfirmFormat" xml:space="preserve">
+    <value>Import {0} item(s) from {1} to {2} [{3}:{4}], DB {5}?
+
+Existing keys will be skipped. Completed imports remain if canceled.</value>
+  </data>
+  <data name="ImportExpectedArray" xml:space="preserve">
+    <value>Expected a JSON array of entries</value>
+  </data>
+  <data name="ImportEntryNotObjectFormat" xml:space="preserve">
+    <value>Entry {0}: this is not a JSON object ({1})</value>
+  </data>
+  <data name="ImportEntryExpectedObjectFormat" xml:space="preserve">
+    <value>Entry {0}: expected a JSON object but found {1}</value>
+  </data>
+  <data name="ImportNoKeyField" xml:space="preserve">
+    <value>no "key" field</value>
+  </data>
+  <data name="ImportKeyLabelFormat" xml:space="preserve">
+    <value>key "{0}"</value>
+  </data>
+  <data name="ImportEntryErrorFormat" xml:space="preserve">
+    <value>Entry {0} ({1}): {2}</value>
+  </data>
+  <data name="ImportEntryRejectedFormat" xml:space="preserve">
+    <value>Entry {0} ({1}): server rejected it - {2}</value>
+  </data>
+  <data name="ImportUnexpectedEnd" xml:space="preserve">
+    <value>Unexpected end of JSON file; only completed entries were imported</value>
+  </data>
+  <data name="ImportInvalidJsonFormat" xml:space="preserve">
+    <value>Invalid JSON: {0}</value>
+  </data>
+  <data name="ImportProgressFormat" xml:space="preserve">
+    <value>Processed {0}: imported {1}, skipped {2}, failed {3}</value>
+  </data>
+  <data name="ImportFileMissing" xml:space="preserve">
+    <value>The file no longer exists.</value>
+  </data>
+  <data name="ImportFileEmpty" xml:space="preserve">
+    <value>The file is empty.</value>
+  </data>
+  <data name="ImportFileTooLargeFormat" xml:space="preserve">
+    <value>The file is larger than the {0} MB import limit.</value>
+  </data>
+  <data name="ImportFileNoJson" xml:space="preserve">
+    <value>The file contains no JSON.</value>
+  </data>
+  <data name="ImportFileNotArrayFormat" xml:space="preserve">
+    <value>Expected a JSON array of entries, but the file starts with {0}.</value>
+  </data>
+  <data name="ImportFileTooManyEntriesFormat" xml:space="preserve">
+    <value>The file holds more than the {0} entry import limit.</value>
+  </data>
+  <data name="ImportFileTruncated" xml:space="preserve">
+    <value>The file ends before the closing ], so it looks truncated or incomplete.</value>
+  </data>
+  <data name="ImportFileInvalidJsonFormat" xml:space="preserve">
+    <value>The file is not valid JSON: {0}</value>
+  </data>
+  <data name="ImportFileUnreadableFormat" xml:space="preserve">
+    <value>The file could not be read: {0}</value>
+  </data>
+  <data name="ImportMissingKey" xml:space="preserve">
+    <value>Missing "key" field</value>
+  </data>
+  <data name="ImportEmptyKey" xml:space="preserve">
+    <value>The "key" field is empty</value>
+  </data>
+  <data name="ImportRecordedErrorFormat" xml:space="preserve">
+    <value>The export recorded an error for this key{0}</value>
+  </data>
+  <data name="ImportDumpNotBase64Format" xml:space="preserve">
+    <value>The "dump" field is not valid Base64{0}</value>
+  </data>
+  <data name="ImportMissingPttlFormat" xml:space="preserve">
+    <value>Missing "pttl" field, which "dump" requires{0}</value>
+  </data>
+  <data name="ImportPttlNotNumberFormat" xml:space="preserve">
+    <value>The "pttl" field is not a number{0}</value>
+  </data>
+  <data name="ImportPttlOutOfRangeFormat" xml:space="preserve">
+    <value>The "pttl" field is {0}, but only -1 or milliseconds are valid{1}</value>
+  </data>
+  <data name="ImportNoDumpOrValueFormat" xml:space="preserve">
+    <value>Entry has neither "dump" nor "value"{0}</value>
+  </data>
+  <data name="ImportStringExpectedTextFormat" xml:space="preserve">
+    <value>Expected a text value for a String key, found {0}{1}</value>
+  </data>
+  <data name="ImportHashMissingFieldFormat" xml:space="preserve">
+    <value>A hash item is missing "field"{0}</value>
+  </data>
+  <data name="ImportHashMissingValueFormat" xml:space="preserve">
+    <value>A hash item is missing "value"{0}</value>
+  </data>
+  <data name="ImportCollectionExpectedTextFormat" xml:space="preserve">
+    <value>Expected a text member for a {0} key, found {1}{2}</value>
+  </data>
+  <data name="ImportScoreNotFiniteFormat" xml:space="preserve">
+    <value>A sorted-set score is not a finite number{0}</value>
+  </data>
+  <data name="ImportMissingMemberFormat" xml:space="preserve">
+    <value>A sorted-set item is missing "member"{0}</value>
+  </data>
+  <data name="ImportStreamMissingIdFormat" xml:space="preserve">
+    <value>A stream entry is missing "id"{0}</value>
+  </data>
+  <data name="ImportStreamIdNotIncreasingFormat" xml:space="preserve">
+    <value>Stream IDs must be valid and increasing, but found "{0}"{1}</value>
+  </data>
+  <data name="ImportStreamMissingFieldsFormat" xml:space="preserve">
+    <value>Stream entry {0} is missing its "fields" array{1}</value>
+  </data>
+  <data name="ImportStreamFieldMissingNameFormat" xml:space="preserve">
+    <value>A stream field is missing "name"{0}</value>
+  </data>
+  <data name="ImportStreamFieldMissingValueFormat" xml:space="preserve">
+    <value>A stream field is missing "value"{0}</value>
+  </data>
+  <data name="ImportStreamNoFieldsFormat" xml:space="preserve">
+    <value>Stream entry {0} has no fields{1}</value>
+  </data>
+  <data name="ImportMissingTypeFormat" xml:space="preserve">
+    <value>Entry has a value but no "type" field{0}</value>
+  </data>
+  <data name="ImportUnsupportedTypeFormat" xml:space="preserve">
+    <value>Unsupported type "{0}"{1}</value>
+  </data>
+  <data name="ImportEmptyValueFormat" xml:space="preserve">
+    <value>An empty {0} cannot be restored{1}</value>
+  </data>
+  <data name="ImportTtlNotNumberFormat" xml:space="preserve">
+    <value>The "ttl" field is not a number{0}</value>
+  </data>
+  <data name="ImportTtlOutOfRangeFormat" xml:space="preserve">
+    <value>The "ttl" field is out of range{0}</value>
+  </data>
+  <data name="GroupsWindowTitle" xml:space="preserve">
+    <value>Connection groups</value>
+  </data>
+  <data name="GroupsHint" xml:space="preserve">
+    <value>A connection can belong to one group only. Clearing it here moves it back to the top level.</value>
+  </data>
+  <data name="GroupsColumnGroup" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="GroupsColumnConnections" xml:space="preserve">
+    <value>Connections</value>
+  </data>
+  <data name="GroupsColumnInGroup" xml:space="preserve">
+    <value>In group</value>
+  </data>
+  <data name="GroupsColumnConnection" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="GroupsColumnEndpoint" xml:space="preserve">
+    <value>Endpoint</value>
+  </data>
+  <data name="GroupsAddExisting" xml:space="preserve">
+    <value>Add existing connection...</value>
+  </data>
+  <data name="GroupsNewGroup" xml:space="preserve">
+    <value>New group</value>
+  </data>
+  <data name="GroupsRename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="GroupsSave" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="GroupsCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="GroupsNamePrompt" xml:space="preserve">
+    <value>Group name</value>
+  </data>
+  <data name="GroupsNameEmpty" xml:space="preserve">
+    <value>Group name can not be empty.</value>
+  </data>
+  <data name="GroupsNameExistsFormat" xml:space="preserve">
+    <value>A group named "{0}" already exists.</value>
+  </data>
+  <data name="GroupsSelectFirst" xml:space="preserve">
+    <value>Select a group first.</value>
+  </data>
+  <data name="GroupsDeleteEmptyFormat" xml:space="preserve">
+    <value>Delete the group "{0}"?
+
+It is empty, so nothing else changes.</value>
+  </data>
+  <data name="GroupsDeleteWithMembersFormat" xml:space="preserve">
+    <value>Delete the group "{0}"?
+
+Its {1} connection(s) are kept and move back to the top level.</value>
+  </data>
+  <data name="GroupsAddConnectionTitle" xml:space="preserve">
+    <value>Add connection</value>
+  </data>
+  <data name="GroupsAllAlreadyMembers" xml:space="preserve">
+    <value>Every connection is already in this group.</value>
+  </data>
+  <data name="GroupsConnectionToAdd" xml:space="preserve">
+    <value>Connection to add</value>
+  </data>
+  <data name="GroupsAdd" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="GroupsNewGroupTitle" xml:space="preserve">
+    <value>New group</value>
+  </data>
+  <data name="GroupsRenameTitle" xml:space="preserve">
+    <value>Rename group</value>
+  </data>
+  <data name="GroupsDeleteTitle" xml:space="preserve">
+    <value>Delete group</value>
+  </data>
+  <data name="StringToolsTitle" xml:space="preserve">
+    <value>String tools (bitmap / HyperLogLog / LCS)</value>
+  </data>
+  <data name="StringToolsStart" xml:space="preserve">
+    <value>Start:</value>
+  </data>
+  <data name="StringToolsEnd" xml:space="preserve">
+    <value>End:</value>
+  </data>
+  <data name="StringToolsIndexByBit" xml:space="preserve">
+    <value>Index by bit</value>
+  </data>
+  <data name="StringToolsBit" xml:space="preserve">
+    <value>Bit:</value>
+  </data>
+  <data name="StringToolsOtherKey" xml:space="preserve">
+    <value>Other key:</value>
+  </data>
+  <data name="StringToolsClear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="StringToolsRangeNotIntegers" xml:space="preserve">
+    <value>start and end must be integers</value>
+  </data>
+  <data name="StringToolsBitMustBeZeroOrOne" xml:space="preserve">
+    <value>bit must be 0 or 1</value>
+  </data>
+  <data name="StringToolsNoBitFoundFormat" xml:space="preserve">
+    <value>no {0} in [{1}..{2}]</value>
+  </data>
+  <data name="StringToolsFirstBitAtFormat" xml:space="preserve">
+    <value>first {0} at offset {1}</value>
+  </data>
+  <data name="StringToolsBitCountFormat" xml:space="preserve">
+    <value>{0} bit(s) set in [{1}..{2}] ({3} indexed)</value>
+  </data>
+  <data name="StringToolsByteIndexed" xml:space="preserve">
+    <value>byte</value>
+  </data>
+  <data name="StringToolsBitIndexed" xml:space="preserve">
+    <value>bit</value>
+  </data>
+  <data name="StringToolsGetRangeFormat" xml:space="preserve">
+    <value>{0} byte(s): {1}</value>
+  </data>
+  <data name="StringToolsRangeTruncatedFormat" xml:space="preserve">
+    <value>... [{0} more chars]</value>
+  </data>
+  <data name="StringToolsPfCountFormat" xml:space="preserve">
+    <value>{0} distinct element(s) estimated</value>
+  </data>
+  <data name="StringToolsEnterOtherKey" xml:space="preserve">
+    <value>enter the other key in "Other key" first</value>
+  </data>
+  <data name="StringToolsConfirmPfMergeTitle" xml:space="preserve">
+    <value>Confirm PFMERGE</value>
+  </data>
+  <data name="StringToolsConfirmPfMergeFormat" xml:space="preserve">
+    <value>Merge [{0}] into [{1}]?
+
+This changes both keys and cannot be undone from here.</value>
+  </data>
+  <data name="StringToolsPfMergeResultFormat" xml:space="preserve">
+    <value>merged into {0}; now {1} distinct element(s)</value>
+  </data>
+  <data name="StringToolsNoCommonSubsequence" xml:space="preserve">
+    <value>no common subsequence</value>
+  </data>
+  <data name="StringToolsLcsFormat" xml:space="preserve">
+    <value>{0} character(s) in common</value>
+  </data>
+  <data name="StringToolsFailedFormat" xml:space="preserve">
+    <value>{0}: failed - {1}</value>
+  </data>
+  <data name="PubSubTitle" xml:space="preserve">
+    <value>Pub/Sub</value>
+  </data>
+  <data name="PubSubWindowTitleFormat" xml:space="preserve">
+    <value>Pub/Sub - {0} [{1}:{2}]</value>
+  </data>
+  <data name="PubSubSubscriptionsFormat" xml:space="preserve">
+    <value>Subscriptions: {0}</value>
+  </data>
+  <data name="PubSubAlreadySubscribedFormat" xml:space="preserve">
+    <value>Already subscribed to [{0}]</value>
+  </data>
+  <data name="PubSubPatternSuffix" xml:space="preserve">
+    <value>{0}  (pattern)</value>
+  </data>
+  <data name="PubSubKeyspaceButton" xml:space="preserve">
+    <value>Watch keyspace events</value>
+  </data>
+  <data name="PubSubKeyspaceChannelLabel" xml:space="preserve">
+    <value>__keyspace@*__:key  (keyspace notifications)</value>
+  </data>
+  <data name="PubSubKeyspaceDbFormat" xml:space="preserve">
+    <value>{0}  (db{1})</value>
+  </data>
+  <data name="PubSubKeyspaceTitle" xml:space="preserve">
+    <value>Keyspace notifications</value>
+  </data>
+  <data name="PubSubKeyspaceInfo" xml:space="preserve">
+    <value>Watching keyspace notifications for every database.
+
+You will only see events if the server has notify-keyspace-events enabled (for example: CONFIG SET notify-keyspace-events "KEA").</value>
+  </data>
+  <data name="PubSubPublishedFormat" xml:space="preserve">
+    <value>Published to {0}, {1} receiver(s)</value>
+  </data>
+  <data name="PubSubDroppedFormat" xml:space="preserve">
+    <value>{0} shown · {1:N0} older messages dropped</value>
+  </data>
+  <data name="PubSubMessageTruncatedFormat" xml:space="preserve">
+    <value>... [{0:N0} more characters truncated]</value>
+  </data>
+  <data name="PagerPrevious" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="PagerNext" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="PagerPageFormat" xml:space="preserve">
+    <value>Page {0} · search applies to this page</value>
+  </data>
+  <data name="DiscardUnsavedPrompt" xml:space="preserve">
+    <value>Discard unsaved edits?</value>
+  </data>
+  <data name="UnsavedChangesTitle" xml:space="preserve">
+    <value>Unsaved changes</value>
+  </data>
+  <data name="MainWindowTitle" xml:space="preserve">
+    <value>Redis Gui Manager</value>
+  </data>
+  <data name="MainWindowTitleWithNameFormat" xml:space="preserve">
+    <value>Redis Gui Manager ({0})</value>
+  </data>
+  <data name="ConnectionsLoadedFormat" xml:space="preserve">
+    <value>Loaded {0} connections from {1} file(s)</value>
+  </data>
+  <data name="ConnectionsGroupsUpdatedFormat" xml:space="preserve">
+    <value>Groups updated: {0} group(s), {1} ungrouped</value>
+  </data>
+  <data name="ConnectionsJsonErrorFormat" xml:space="preserve">
+    <value>JSON format error: {0}</value>
+  </data>
+  <data name="ConnectionsSkippedEntryFormat" xml:space="preserve">
+    <value>{0}: skipped an entry with no name and no host</value>
+  </data>
+  <data name="ConnectionLoadFailedFormat" xml:space="preserve">
+    <value>Load failed: {0} - {1}</value>
+  </data>
+  <data name="ConnectionStatusFormat" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="ConnectionStatusReadOnlyFormat" xml:space="preserve">
+    <value>{0}: {1} · read-only</value>
+  </data>
+  <data name="SelectDbFailedFormat" xml:space="preserve">
+    <value>Select [{0}] DB {1} fail</value>
+  </data>
+  <data name="KeyNotExistFormat" xml:space="preserve">
+    <value>key {0} is not exist</value>
+  </data>
+  <data name="RedisRequestFailedTitle" xml:space="preserve">
+    <value>Redis request failed</value>
+  </data>
+  <data name="RedisReloadHint" xml:space="preserve">
+    <value>Reload the connection to retry.</value>
+  </data>
+  <data name="ConnectFailedDetailFormat" xml:space="preserve">
+    <value>Failed to connect to redis[{0}] IpAddress:{1} Port:{2}</value>
+  </data>
+  <data name="LoadKeysTitle" xml:space="preserve">
+    <value>Load keys</value>
+  </data>
+  <data name="ConnectTitle" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="KeyScanFailedTitle" xml:space="preserve">
+    <value>Key scan failed</value>
+  </data>
+  <data name="KeyScanPausedStatus" xml:space="preserve">
+    <value>Key scan paused; use Load next to continue</value>
+  </data>
+  <data name="KeyScanFailedDetailFormat" xml:space="preserve">
+    <value>{0}
+Already loaded keys remain; reload to retry.</value>
+  </data>
+  <data name="LoadNextKeysLabel" xml:space="preserve">
+    <value>Load next 500 keys...</value>
+  </data>
+  <data name="KeyCountFailedFormat" xml:space="preserve">
+    <value>Could not read the key count for db{0}. The server may be unreachable.</value>
+  </data>
+  <data name="KeyStatusFormat" xml:space="preserve">
+    <value>{0} · DB {1} · {2} {3}</value>
+  </data>
+  <data name="ConnectedStatus" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="DisconnectedStatus" xml:space="preserve">
+    <value>Disconnected</value>
+  </data>
+  <data name="ReadOnlyStatusSuffix" xml:space="preserve">
+    <value>· read-only</value>
+  </data>
+  <data name="KeyHasNoTtl" xml:space="preserve">
+    <value>Key has no associated TTL (permanent).</value>
+  </data>
+  <data name="KeyDoesNotExist" xml:space="preserve">
+    <value>Key does not exist.</value>
+  </data>
+  <data name="SetTtlPromptDetailed" xml:space="preserve">
+    <value>Set TTL (seconds), -1 = permanent, 0 = delete immediately</value>
+  </data>
+  <data name="PermanentNoTtl" xml:space="preserve">
+    <value>permanent (no TTL)</value>
+  </data>
+  <data name="Permanent" xml:space="preserve">
+    <value>permanent</value>
+  </data>
+  <data name="StatusConnecting" xml:space="preserve">
+    <value>Connecting…</value>
+  </data>
+  <data name="StatusDisconnectedReconnecting" xml:space="preserve">
+    <value>Disconnected; reconnecting…</value>
+  </data>
+  <data name="StatusNotConnected" xml:space="preserve">
+    <value>Not connected</value>
+  </data>
+  <data name="StatusServerUnavailable" xml:space="preserve">
+    <value>Server is not available</value>
+  </data>
+  <data name="StatusClusterDbZeroOnly" xml:space="preserve">
+    <value>Cluster supports DB 0 only</value>
+  </data>
+  <data name="StatusClusterPrimariesDisconnected" xml:space="preserve">
+    <value>Not all cluster primary nodes are connected</value>
+  </data>
 </root>

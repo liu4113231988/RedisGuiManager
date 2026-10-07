@@ -210,7 +210,7 @@ namespace RedisGuiManager
 
             try
 			{
-                ReportStatus("Connecting…");
+                ReportStatus(UiText.StatusConnecting);
                 connection = ConnectionMultiplexer.Connect(temp_config);
 
                 // AbortOnConnectFail is off so the multiplexer can recover later, which means
@@ -221,8 +221,8 @@ namespace RedisGuiManager
                     return new OperateResult(false, $"\r\nConnection fail\r\nCannot reach {string.Join(", ", config.EndPoints.Select(e => e.ToString()))}");
                 }
 
-                connection.ConnectionFailed += (s, e) => ReportStatus("Disconnected; reconnecting…");
-                connection.ConnectionRestored += (s, e) => ReportStatus("Connected");
+                connection.ConnectionFailed += (s, e) => ReportStatus(UiText.StatusDisconnectedReconnecting);
+                connection.ConnectionRestored += (s, e) => ReportStatus(UiText.ConnectedStatus);
             }
             catch (RedisConnectionException ex)
 			{
@@ -246,7 +246,7 @@ namespace RedisGuiManager
             }
             Redis = connection.GetDatabase();
 
-            ReportStatus("Connected");
+            ReportStatus(UiText.ConnectedStatus);
             return new OperateResult(true, "");
         }
 
@@ -278,7 +278,7 @@ namespace RedisGuiManager
         {
             // Report through the guarded helper first: a throwing subscriber must not prevent the
             // multiplexer and the SSH session from being released.
-            ReportStatus("Disconnected");
+            ReportStatus(UiText.DisconnectedStatus);
 
             try
             {
@@ -335,7 +335,7 @@ namespace RedisGuiManager
 
             if (connection == null || !connection.IsConnected)
             {
-                ReportStatus("Not connected");
+                ReportStatus(UiText.StatusNotConnected);
                 return false;
             }
 
@@ -343,7 +343,7 @@ namespace RedisGuiManager
             {
                 if (RedisServer == null)
                 {
-                    ReportStatus("Server is not available");
+                    ReportStatus(UiText.StatusServerUnavailable);
                     return false;
                 }
 
@@ -353,7 +353,7 @@ namespace RedisGuiManager
 
             if (database != 0)
             {
-                ReportStatus("Cluster supports DB 0 only");
+                ReportStatus(UiText.StatusClusterDbZeroOnly);
                 return false;
             }
 
@@ -442,14 +442,14 @@ namespace RedisGuiManager
             servers = Array.Empty<IServer>();
             if (connection == null || !connection.IsConnected)
             {
-                ReportStatus("Not connected");
+                ReportStatus(UiText.StatusNotConnected);
                 return false;
             }
 
             servers = connection.GetEndPoints().Select(ep => connection.GetServer(ep)).Where(s => !s.IsReplica).ToArray();
             if (servers.Length == 0 || servers.Any(s => !s.IsConnected))
             {
-                ReportStatus("Not all cluster primary nodes are connected");
+                ReportStatus(UiText.StatusClusterPrimariesDisconnected);
                 servers = Array.Empty<IServer>();
                 return false;
             }
@@ -467,7 +467,7 @@ namespace RedisGuiManager
             size = -1;
             if (connection == null || !connection.IsConnected)
             {
-                ReportStatus("Not connected");
+                ReportStatus(UiText.StatusNotConnected);
                 return false;
             }
 

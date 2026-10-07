@@ -194,11 +194,11 @@ namespace RedisGuiManager
                 string message;
                 if (ttl == null)
                 {
-                    message = database.KeyExists(select.Text) ? "Key has no associated TTL (permanent)." : "Key does not exist.";
+                    message = database.KeyExists(select.Text) ? UiText.KeyHasNoTtl : UiText.KeyDoesNotExist;
                 }
                 else if (ttl.Value.TotalSeconds < 0)
                 {
-                    message = database.KeyExists(select.Text) ? "Key has no associated TTL (permanent)." : "Key does not exist.";
+                    message = database.KeyExists(select.Text) ? UiText.KeyHasNoTtl : UiText.KeyDoesNotExist;
                 }
                 else
                 {
@@ -223,7 +223,7 @@ namespace RedisGuiManager
                 var database = redisClient.GetDB(dbSettings.DBNumber);
 
                 using FormInputString formInput = new FormInputString();
-                formInput.TextInfo = "Set TTL (seconds), -1 = permanent, 0 = delete immediately";
+                formInput.TextInfo = UiText.SetTtlPromptDetailed;
                 formInput.InputValue = "";
 
                 if (formInput.ShowDialog() == DialogResult.OK)
@@ -264,7 +264,7 @@ namespace RedisGuiManager
                             if (database.KeyExpire(select.Text, TimeSpan.FromSeconds(seconds)))
                             {
                                 var ttl = database.KeyTimeToLive(select.Text);
-                                string ttlStr = ttl != null ? FormatTTL(ttl.Value) : "permanent";
+                                string ttlStr = ttl != null ? FormatTTL(ttl.Value) : UiText.Permanent;
                                 MessageBox.Show(string.Format(UiText.TtlSetSuccess, select.Text, ttlStr), UiText.SuccessTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                             }
                             else

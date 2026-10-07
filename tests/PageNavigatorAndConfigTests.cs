@@ -121,19 +121,39 @@ namespace RedisGuiManager.Tests
         }
 
         [Fact]
-        public async Task Handler_exception_restores_the_previous_offset()
+        public async Task Handler_exception_is_reported_through_LoadFailed_and_restores_the_offset()
         {
             using var page = new PageNavigator();
             Func<Task> commit = () => { page.UpdatePage(true); return Task.CompletedTask; };
             page.PageChanged += commit;
             await page.NavigateAsync(PageNavigator.PageSize);
 
+            // The click handlers are async void, so an exception escaping NavigateAsync would land on
+            // Application.ThreadException and end the process. It is surfaced through LoadFailed
+            // instead, and the offset stays on the page that is actually on screen.
+            Exception reported = null;
+            page.LoadFailed += ex => reported = ex;
             page.PageChanged -= commit;
             page.PageChanged += () => throw new InvalidOperationException("load failed");
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => page.NavigateAsync(PageNavigator.PageSize * 2));
+            bool moved = await page.NavigateAsync(PageNavigator.PageSize * 2);
 
+            Assert.False(moved);
+            Assert.IsType<InvalidOperationException>(reported);
             Assert.Equal(PageNavigator.PageSize, page.Offset);
+        }
+
+        [Fact]
+        public async Task LoadFailed_is_not_raised_when_the_page_loads()
+        {
+            using var page = new PageNavigator();
+            bool failed = false;
+            page.LoadFailed += _ => failed = true;
+            page.PageChanged += () => { page.UpdatePage(true); return Task.CompletedTask; };
+
+            await page.NavigateAsync(PageNavigator.PageSize);
+
+            Assert.False(failed);
         }
 
         [Fact]

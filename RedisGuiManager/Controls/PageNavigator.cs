@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -11,8 +12,8 @@ namespace RedisGuiManager
     {
         public const int PageSize = 500;
         public int Offset { get; private set; }
-        private readonly Button previous = new Button { Text = "Previous", AutoSize = true };
-        private readonly Button next = new Button { Text = "Next", AutoSize = true };
+        private readonly Button previous = new Button { Text = UiText.PagerPrevious, AutoSize = true };
+        private readonly Button next = new Button { Text = UiText.PagerNext, AutoSize = true };
         private readonly Label page = new Label { AutoSize = true, Padding = new Padding(8) };
         private bool committed;
         private bool navigating;
@@ -91,7 +92,7 @@ namespace RedisGuiManager
             committed = true;
             previous.Enabled = Offset > 0;
             next.Enabled = more;
-            page.Text = $"Page {Offset / PageSize + 1} · search applies to this page";
+            page.Text = string.Format(UiText.PagerPageFormat, Offset / PageSize + 1);
         }
 
         /// <summary>

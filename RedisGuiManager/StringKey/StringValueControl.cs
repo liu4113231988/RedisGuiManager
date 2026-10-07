@@ -65,22 +65,22 @@ namespace RedisGuiManager
         {
             var group = new GroupBox
             {
-                Text = "String tools (bitmap / HyperLogLog / LCS)",
+                Text = UiText.StringToolsTitle,
                 Dock = DockStyle.Bottom,
                 Height = 176,
                 Width = 700,
                 Padding = new Padding(8)
             };
 
-            var startLabel = new Label { Text = "Start:", Location = new Point(12, 26), Width = 40 };
+            var startLabel = new Label { Text = UiText.StringToolsStart, Location = new Point(12, 26), Width = 40 };
             rangeStart = new TextBox { Location = new Point(52, 22), Width = 60, Text = "0" };
-            var endLabel = new Label { Text = "End:", Location = new Point(120, 26), Width = 32 };
+            var endLabel = new Label { Text = UiText.StringToolsEnd, Location = new Point(120, 26), Width = 32 };
             rangeEnd = new TextBox { Location = new Point(152, 22), Width = 60, Text = "-1" };
-            indexByBit = new CheckBox { Text = "Index by bit", Location = new Point(220, 24), AutoSize = true };
-            var bitLabel = new Label { Text = "Bit:", Location = new Point(310, 26), Width = 26 };
+            indexByBit = new CheckBox { Text = UiText.StringToolsIndexByBit, Location = new Point(220, 24), AutoSize = true };
+            var bitLabel = new Label { Text = UiText.StringToolsBit, Location = new Point(310, 26), Width = 26 };
             bitValue = new TextBox { Location = new Point(336, 22), Width = 40, Text = "1" };
 
-            var otherLabel = new Label { Text = "Other key:", Location = new Point(388, 26), Width = 62 };
+            var otherLabel = new Label { Text = UiText.StringToolsOtherKey, Location = new Point(388, 26), Width = 62 };
             otherKey = new TextBox { Location = new Point(450, 22), Width = 130 };
 
             group.Controls.Add(startLabel);
@@ -101,7 +101,7 @@ namespace RedisGuiManager
             x = AddToolButton(group, "PFMERGE", x, 100, async (s, e) => await RunPfMergeAsync());
             x = AddToolButton(group, "LCS", x, 80, async (s, e) => await RunLcsAsync());
 
-            AddToolButton(group, "Clear", x, 70, (s, e) => toolResults.Items.Clear());
+            AddToolButton(group, UiText.StringToolsClear, x, 70, (s, e) => toolResults.Items.Clear());
 
             toolResults = new ListBox
             {
@@ -179,7 +179,7 @@ namespace RedisGuiManager
             {
                 // WRONGTYPE here means the key is not the structure the command expects; say so
                 // rather than showing the bare server error.
-                Report($"{name}: failed - {ex.Message}");
+                Report(string.Format(UiText.StringToolsFailedFormat, name, ex.Message));
             }
         }
 
@@ -187,48 +187,51 @@ namespace RedisGuiManager
         {
             if (TryGetRange(out long start, out long end) == false)
             {
-                return "start and end must be integers";
+                return UiText.StringToolsRangeNotIntegers;
             }
 
             var indexType = indexByBit.Checked ? StringIndexType.Bit : StringIndexType.Byte;
             long count = await database.StringBitCountAsync(stringKeyName, start, end, indexType);
-            return $"{count} bit(s) set in [{start}..{end}] ({(indexByBit.Checked ? "bit" : "byte")} indexed)";
+            return string.Format(UiText.StringToolsBitCountFormat, count, start, end,
+                indexByBit.Checked ? UiText.StringToolsBitIndexed : UiText.StringToolsByteIndexed);
         });
 
         private async Task RunBitPositionAsync() => await RunToolAsync("BITPOS", async () =>
         {
             if (TryGetRange(out long start, out long end) == false)
             {
-                return "start and end must be integers";
+                return UiText.StringToolsRangeNotIntegers;
             }
 
             if (int.TryParse(bitValue.Text, out int bit) == false || bit < 0 || bit > 1)
             {
-                return "bit must be 0 or 1";
+                return UiText.StringToolsBitMustBeZeroOrOne;
             }
 
             var indexType = indexByBit.Checked ? StringIndexType.Bit : StringIndexType.Byte;
             long position = await database.StringBitPositionAsync(stringKeyName, bit == 1, start, end, indexType);
-            return position < 0 ? $"no {bit} in [{start}..{end}]" : $"first {bit} at offset {position}";
+            return position < 0
+                ? string.Format(UiText.StringToolsNoBitFoundFormat, bit, start, end)
+                : string.Format(UiText.StringToolsFirstBitAtFormat, bit, position);
         });
 
         private async Task RunGetRangeAsync() => await RunToolAsync("GETRANGE", async () =>
         {
             if (TryGetRange(out long start, out long end) == false)
             {
-                return "start and end must be integers";
+                return UiText.StringToolsRangeNotIntegers;
             }
 
             var slice = await database.StringGetRangeAsync(stringKeyName, start, end);
             string text = slice.ToString();
-            if (text.Length > 400) text = text.Substring(0, 400) + $"... [{text.Length - 400} more chars]";
-            return $"{slice.Length} byte(s): {text}";
+            if (text.Length > 400) text = text.Substring(0, 400) + string.Format(UiText.StringToolsRangeTruncatedFormat, text.Length - 400);
+            return string.Format(UiText.StringToolsGetRangeFormat, slice.Length(), text);
         });
 
         private async Task RunPfCountAsync() => await RunToolAsync("PFCOUNT", async () =>
         {
             long cardinality = await database.HyperLogLogLengthAsync(stringKeyName);
-            return $"{cardinality:N0} distinct element(s) estimated";
+            return string.Format(UiText.StringToolsPfCountFormat, cardinality.ToString("N0"));
         });
 
         private async Task RunPfMergeAsync()
@@ -236,15 +239,15 @@ namespace RedisGuiManager
             string other = otherKey.Text.Trim();
             if (other.Length == 0)
             {
-                Report("PFMERGE: enter the other key in \"Other key\" first");
+                Report("PFMERGE: " + UiText.StringToolsEnterOtherKey);
                 return;
             }
 
             if (!redisClient.CanWrite()) return;
 
             if (MessageBox.Show(this,
-                    $"Merge [{otherKey.Text.Trim()}] into [{stringKeyName}]?\r\n\r\nThis changes both keys and cannot be undone from here.",
-                    "Confirm PFMERGE", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    string.Format(UiText.StringToolsConfirmPfMergeFormat, otherKey.Text.Trim(), stringKeyName),
+                    UiText.StringToolsConfirmPfMergeTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             {
                 return;
             }
@@ -253,7 +256,7 @@ namespace RedisGuiManager
             {
                 await database.HyperLogLogMergeAsync(stringKeyName, stringKeyName, other);
                 long cardinality = await database.HyperLogLogLengthAsync(stringKeyName);
-                return $"merged into {stringKeyName}; now {cardinality:N0} distinct element(s)";
+                return string.Format(UiText.StringToolsPfMergeResultFormat, stringKeyName, cardinality.ToString("N0"));
             });
 
             await RefreshKeyAsync();
@@ -262,13 +265,17 @@ namespace RedisGuiManager
         private async Task RunLcsAsync() => await RunToolAsync("LCS", async () =>
         {
             string other = otherKey.Text.Trim();
-            if (other.Length == 0) return "enter the other key in \"Other key\" first";
+            if (other.Length == 0) return UiText.StringToolsEnterOtherKey;
 
-            // LCS has no binding in StackExchange.Redis; it needs Redis 7.0+.
-            var result = (RedisResult[])await database.ExecuteAsync(
-                "LCS", stringKeyName, other, "LEN");
+            // LCS has no binding in StackExchange.Redis; it needs Redis 7.0+. With LEN the server
+            // replies with a single integer (the common length), not an array, so read it as one.
+            var result = await database.ExecuteAsync("LCS", stringKeyName, other, "LEN");
+            if (result.IsNull) return UiText.StringToolsNoCommonSubsequence;
 
-            return result.Length == 0 ? "no common subsequence" : $"{result[0]} character(s) in common";
+            long commonLength = (long)result;
+            return commonLength == 0
+                ? UiText.StringToolsNoCommonSubsequence
+                : string.Format(UiText.StringToolsLcsFormat, commonLength);
         });
 
         private async Task RefreshKeyAsync()

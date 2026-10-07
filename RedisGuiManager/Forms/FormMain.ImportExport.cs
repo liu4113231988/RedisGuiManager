@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using StackExchange.Redis;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -128,10 +129,10 @@ namespace RedisGuiManager
             if (selected == null || GetDbNode(selected)?.Tag is not DbSettings dbSettings) return;
             var client = (RedisClient)GetRedisNode(selected).Tag;
             var database = client.GetDB(dbSettings.DBNumber);
-            using var dialog = new SaveFileDialog { Filter = "JSON files (*.json)|*.json", FileName = $"redis_export_db{dbSettings.DBNumber}.json" };
+            using var dialog = new SaveFileDialog { Filter = UiText.JsonFileFilter, FileName = string.Format(UiText.ExportFileNameFormat, dbSettings.DBNumber) };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             string path = dialog.FileName;
-            var outcome = await OperationDialog.RunAsync(this, "Export data", (token, progress) =>
+            var outcome = await OperationDialog.RunAsync(this, UiText.ExportDataTitle, (token, progress) =>
             {
                 var report = new OperationReport();
                 string temporary = path + ".partial-" + Guid.NewGuid().ToString("N");
@@ -155,8 +156,8 @@ namespace RedisGuiManager
                                 serializer.Serialize(writer, BuildExportRecord(database, key, (byte[])snapshot[0], (long)snapshot[1]));
                                 report.Success++;
                             }
-                            catch (RedisException ex) { report.Errors.Add($"{key}: {ex.Message}"); }
-                            if ((report.Success + report.Errors.Count) % 100 == 0) progress.Report($"Exported {report.Success} keys; failed {report.Errors.Count}");
+                            catch (RedisException ex) { report.Errors.Add(string.Format(UiText.KeyedMessageFormat, key, ex.Message)); }
+                            if ((report.Success + report.Errors.Count) % 100 == 0) progress.Report(string.Format(UiText.ExportProgressFormat, report.Success, report.Errors.Count));
                         }
                         writer.WriteEndArray();
                     }
@@ -169,7 +170,7 @@ namespace RedisGuiManager
             });
             if (!outcome.IsSuccess) return;
             var result = outcome.Value;
-            result.Show(this, result.Canceled ? (result.Success > 0 ? "Partial export saved" : "Export canceled; file unchanged") : "Export result");
+            result.Show(this, result.Canceled ? (result.Success > 0 ? UiText.ExportPartialSaved : UiText.ExportCanceledUnchanged) : UiText.ExportResultTitle);
         }
 
         private async void import_data_ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -179,7 +180,7 @@ namespace RedisGuiManager
             if (selected == null || GetDbNode(selected)?.Tag is not DbSettings dbSettings) return;
             var client = (RedisClient)GetRedisNode(selected).Tag;
             var database = client.GetDB(dbSettings.DBNumber);
-            using var dialog = new OpenFileDialog { Filter = "JSON files (*.json)|*.json" };
+            using var dialog = new OpenFileDialog { Filter = UiText.JsonFileFilter };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             string path = dialog.FileName;
 
@@ -187,25 +188,25 @@ namespace RedisGuiManager
             // the confirmation is more useful when it can say how many entries are coming.
             if (TryInspectImportFile(path, out int entryCount, out string problem) == false)
             {
-                MessageBox.Show(this, $"{Path.GetFileName(path)} cannot be imported.\r\n\r\n{problem}",
-                    "Invalid import file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, string.Format(UiText.ImportCannotImportFormat, Path.GetFileName(path), problem),
+                    UiText.ImportInvalidTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (entryCount == 0)
             {
-                MessageBox.Show(this, $"{Path.GetFileName(path)} contains no entries to import.",
-                    "Nothing to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, string.Format(UiText.ImportNoEntriesFormat, Path.GetFileName(path)),
+                    UiText.ImportNothingTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            if (MessageBox.Show(this, $"Import {entryCount} entr{(entryCount == 1 ? "y" : "ies")} from {Path.GetFileName(path)} to {client.Settings.name} [{client.Settings.host}:{client.Settings.port}], DB {dbSettings.DBNumber}?\n\nExisting keys will be skipped. Completed imports remain if canceled.", "Confirm import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-            var outcome = await OperationDialog.RunAsync(this, "Import data", (token, progress) =>
+            if (MessageBox.Show(this, string.Format(UiText.ImportConfirmFormat, entryCount, Path.GetFileName(path), client.Settings.name, client.Settings.host, client.Settings.port, dbSettings.DBNumber), UiText.ConfirmImportTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            var outcome = await OperationDialog.RunAsync(this, UiText.ImportDataTitle, (token, progress) =>
             {
                 var report = new OperationReport();
                 using var reader = new JsonTextReader(new StreamReader(path));
                 var serializer = new JsonSerializer();
-                if (!reader.Read() || reader.TokenType != JsonToken.StartArray) throw new InvalidDataException("Expected a JSON array of entries");
+                if (!reader.Read() || reader.TokenType != JsonToken.StartArray) throw new InvalidDataException(UiText.ImportExpectedArray);
                 int index = 0;
                 try
                 {
@@ -216,25 +217,25 @@ namespace RedisGuiManager
                     // Parse a complete entry before writing; malformed JSON ends the file with a partial-result report.
                     Dictionary<string, object> entry;
                     try { entry = serializer.Deserialize<Dictionary<string, object>>(reader); }
-                    catch (JsonException ex) { report.Errors.Add($"Entry {index}: this is not a JSON object ({ex.Message})"); break; }
-                    if (entry == null) { report.Errors.Add($"Entry {index}: expected a JSON object but found {reader.TokenType}"); break; }
+                    catch (JsonException ex) { report.Errors.Add(string.Format(UiText.ImportEntryNotObjectFormat, index, ex.Message)); break; }
+                    if (entry == null) { report.Errors.Add(string.Format(UiText.ImportEntryExpectedObjectFormat, index, reader.TokenType)); break; }
 
                     string keyName = entry.TryGetValue("key", out var keyValue) ? keyValue?.ToString() : null;
-                    string label = keyName == null ? "no \"key\" field" : $"key \"{keyName}\"";
+                    string label = keyName == null ? UiText.ImportNoKeyField : string.Format(UiText.ImportKeyLabelFormat, keyName);
 
                     try { if (ImportEntry(database, entry)) report.Success++; else report.Skipped++; }
-                    catch (InvalidDataException ex) { report.Errors.Add($"Entry {index} ({label}): {ex.Message}"); }
-                    catch (RedisException ex) { report.Errors.Add($"Entry {index} ({label}): server rejected it - {ex.Message}"); }
-                    catch (Exception ex) { report.Errors.Add($"Entry {index} ({label}): {ex.Message}"); }
-                    if (index % 100 == 0) progress.Report($"Processed {index}: imported {report.Success}, skipped {report.Skipped}, failed {report.Errors.Count}");
+                    catch (InvalidDataException ex) { report.Errors.Add(string.Format(UiText.ImportEntryErrorFormat, index, label, ex.Message)); }
+                    catch (RedisException ex) { report.Errors.Add(string.Format(UiText.ImportEntryRejectedFormat, index, label, ex.Message)); }
+                    catch (Exception ex) { report.Errors.Add(string.Format(UiText.ImportEntryErrorFormat, index, label, ex.Message)); }
+                    if (index % 100 == 0) progress.Report(string.Format(UiText.ImportProgressFormat, index, report.Success, report.Skipped, report.Errors.Count));
                 }
-                    if (!report.Canceled && reader.TokenType != JsonToken.EndArray) report.Errors.Add("Unexpected end of JSON file; only completed entries were imported");
+                    if (!report.Canceled && reader.TokenType != JsonToken.EndArray) report.Errors.Add(UiText.ImportUnexpectedEnd);
                 }
-                catch (JsonException ex) { report.Errors.Add("Invalid JSON: " + ex.Message); }
+                catch (JsonException ex) { report.Errors.Add(string.Format(UiText.ImportInvalidJsonFormat, ex.Message)); }
                 return report;
             });
             if (!outcome.IsSuccess) return;
-            outcome.Value.Show(this, "Import result");
+            outcome.Value.Show(this, UiText.ImportResultTitle);
             await RefreshDbKeysAsync(GetDbNode(selected), true);
         }
 
@@ -253,19 +254,19 @@ namespace RedisGuiManager
             {
                 if (File.Exists(path) == false)
                 {
-                    problem = "The file no longer exists.";
+                    problem = UiText.ImportFileMissing;
                     return false;
                 }
 
                 if (new FileInfo(path).Length == 0)
                 {
-                    problem = "The file is empty.";
+                    problem = UiText.ImportFileEmpty;
                     return false;
                 }
 
                 if (new FileInfo(path).Length > MaxImportBytes)
                 {
-                    problem = $"The file is larger than the {MaxImportBytes / (1024 * 1024)} MB import limit.";
+                    problem = string.Format(UiText.ImportFileTooLargeFormat, MaxImportBytes / (1024 * 1024));
                     return false;
                 }
 
@@ -277,19 +278,21 @@ namespace RedisGuiManager
 
                 if (reader.Read() == false)
                 {
-                    problem = "The file contains no JSON.";
+                    problem = UiText.ImportFileNoJson;
                     return false;
                 }
 
                 if (reader.TokenType != JsonToken.StartArray)
                 {
-                    problem = $"Expected a JSON array of entries, but the file starts with {reader.TokenType}.";
+                    problem = string.Format(UiText.ImportFileNotArrayFormat, reader.TokenType);
                     return false;
                 }
 
-                // Count top-level objects without loading the whole file into memory. Read() simply
-                // returns false at end of input, so a truncated array has to be detected by checking
-                // that the closing bracket was actually seen.
+                // Count only the array's direct children. An entry's "value" may hold objects of its
+                // own (Hash fields, Sorted Set members, Stream entries), and counting those would
+                // inflate the total and could trip the entry limit on a perfectly valid file. Skip()
+                // advances past a whole entry, so nested objects are never visited. It also keeps the
+                // scan streaming instead of loading the file into memory.
                 bool closed = false;
                 while (reader.Read())
                 {
@@ -297,19 +300,21 @@ namespace RedisGuiManager
                     if (reader.TokenType == JsonToken.StartObject)
                     {
                         entryCount++;
-                        // Export caps a single file at 500 entries; refuse anything that could only
-                        // have come from a runaway generator instead of loading it key by key.
+                        // Refuse anything that could only have come from a runaway generator instead
+                        // of loading it key by key.
                         if (entryCount > MaxImportEntries)
                         {
-                            problem = $"The file holds more than the {MaxImportEntries:N0} entry import limit.";
+                            problem = string.Format(UiText.ImportFileTooManyEntriesFormat, MaxImportEntries.ToString("N0"));
                             return false;
                         }
+
+                        reader.Skip();
                     }
                 }
 
                 if (closed == false)
                 {
-                    problem = "The file ends before the closing ], so it looks truncated or incomplete.";
+                    problem = UiText.ImportFileTruncated;
                     return false;
                 }
 
@@ -317,17 +322,17 @@ namespace RedisGuiManager
             }
             catch (JsonException ex)
             {
-                problem = $"The file is not valid JSON: {ex.Message}";
+                problem = string.Format(UiText.ImportFileInvalidJsonFormat, ex.Message);
                 return false;
             }
             catch (IOException ex)
             {
-                problem = $"The file could not be read: {ex.Message}";
+                problem = string.Format(UiText.ImportFileUnreadableFormat, ex.Message);
                 return false;
             }
             catch (UnauthorizedAccessException ex)
             {
-                problem = $"The file could not be read: {ex.Message}";
+                problem = string.Format(UiText.ImportFileUnreadableFormat, ex.Message);
                 return false;
             }
         }
@@ -336,12 +341,12 @@ namespace RedisGuiManager
         {
             string key = entry != null && entry.TryGetValue("key", out var keyObj) ? keyObj?.ToString() : null;
             string type = entry != null && entry.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : null;
-            if (key == null) throw new InvalidDataException("Missing \"key\" field");
+            if (key == null) throw new InvalidDataException(UiText.ImportMissingKey);
 
             // Messages name the key so the report row is actionable without opening the file.
-            string at = $" (key \"{key}\")";
-            if (string.IsNullOrWhiteSpace(key)) throw new InvalidDataException("The \"key\" field is empty");
-            if (entry.ContainsKey("error")) throw new InvalidDataException($"The export recorded an error for this key{at}");
+            string at = " (" + string.Format(UiText.ImportKeyLabelFormat, key) + ")";
+            if (string.IsNullOrWhiteSpace(key)) throw new InvalidDataException(UiText.ImportEmptyKey);
+            if (entry.ContainsKey("error")) throw new InvalidDataException(string.Format(UiText.ImportRecordedErrorFormat, at));
 
             // The dump is authoritative: it is the exact serialised form and preserves the TTL, so it must
             // win over the readable value even when an export carries both.
@@ -354,20 +359,20 @@ namespace RedisGuiManager
                 }
                 catch (FormatException)
                 {
-                    throw new InvalidDataException($"The \"dump\" field is not valid Base64{at}");
+                    throw new InvalidDataException(string.Format(UiText.ImportDumpNotBase64Format, at));
                 }
 
                 if (!entry.TryGetValue("pttl", out var pttlValue))
                 {
-                    throw new InvalidDataException($"Missing \"pttl\" field, which \"dump\" requires{at}");
+                    throw new InvalidDataException(string.Format(UiText.ImportMissingPttlFormat, at));
                 }
 
                 if (!long.TryParse(pttlValue?.ToString(), out long ttl))
                 {
-                    throw new InvalidDataException($"The \"pttl\" field is not a number{at}");
+                    throw new InvalidDataException(string.Format(UiText.ImportPttlNotNumberFormat, at));
                 }
 
-                if (ttl < -1) throw new InvalidDataException($"The \"pttl\" field is {ttl}, but only -1 or milliseconds are valid{at}");
+                if (ttl < -1) throw new InvalidDataException(string.Format(UiText.ImportPttlOutOfRangeFormat, ttl, at));
                 if (ttl == 0) return false;
 
                 var restoreKey = entry.TryGetValue("keyBytes", out var encodedKey)
@@ -388,7 +393,7 @@ return 1";
 
             if (!entry.TryGetValue("value", out var rawValue) || rawValue == null)
             {
-                throw new InvalidDataException($"Entry has neither \"dump\" nor \"value\"{at}");
+                throw new InvalidDataException(string.Format(UiText.ImportNoDumpOrValueFormat, at));
             }
 
             if (database.KeyExists(key)) return false;
@@ -397,18 +402,18 @@ return 1";
             switch (type)
             {
                 case "String":
-                    if (value.Type != JTokenType.String) throw new InvalidDataException($"Expected a text value for a String key, found {value.Type}{at}");
+                    if (value.Type != JTokenType.String) throw new InvalidDataException(string.Format(UiText.ImportStringExpectedTextFormat, value.Type, at));
                     commands.Add(new[] { "SET", key, value.ToString() });
                     break;
                 case "Hash":
                     foreach (var item in (JArray)value)
-                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException($"A hash item is missing \"field\"{at}"), item["value"]?.Value<string>() ?? throw new InvalidDataException($"A hash item is missing \"value\"{at}") });
+                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException(string.Format(UiText.ImportHashMissingFieldFormat, at)), item["value"]?.Value<string>() ?? throw new InvalidDataException(string.Format(UiText.ImportHashMissingValueFormat, at)) });
                     break;
                 case "List":
                 case "Set":
                     foreach (var item in (JArray)value)
                     {
-                        if (item.Type != JTokenType.String) throw new InvalidDataException($"Expected a text member for a {type} key, found {item.Type}{at}");
+                        if (item.Type != JTokenType.String) throw new InvalidDataException(string.Format(UiText.ImportCollectionExpectedTextFormat, type, item.Type, at));
                         commands.Add(new[] { type == "List" ? "RPUSH" : "SADD", key, item.ToString() });
                     }
                     break;
@@ -416,43 +421,43 @@ return 1";
                     foreach (var item in (JArray)value)
                     {
                         double score = item["score"].Value<double>();
-                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException($"A sorted-set score is not a finite number{at}");
-                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException($"A sorted-set item is missing \"member\"{at}") });
+                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException(string.Format(UiText.ImportScoreNotFiniteFormat, at));
+                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException(string.Format(UiText.ImportMissingMemberFormat, at)) });
                     }
                     break;
                 case "Stream":
                     ulong previousMs = 0, previousSeq = 0;
                     foreach (var item in (JArray)value)
                     {
-                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException($"A stream entry is missing \"id\"{at}");
+                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException(string.Format(UiText.ImportStreamMissingIdFormat, at));
                         var parts = id.Split('-');
                         if (parts.Length != 2 || !ulong.TryParse(parts[0], out ulong ms) || !ulong.TryParse(parts[1], out ulong seq) || ms < previousMs || (ms == previousMs && seq <= previousSeq))
-                            throw new InvalidDataException($"Stream IDs must be valid and increasing, but found \"{id}\"{at}");
+                            throw new InvalidDataException(string.Format(UiText.ImportStreamIdNotIncreasingFormat, id, at));
                         previousMs = ms; previousSeq = seq;
                         var command = new List<string> { "XADD", key, id };
                         if (item["fields"] is not JArray fields)
-                            throw new InvalidDataException($"Stream entry {id} is missing its \"fields\" array{at}");
+                            throw new InvalidDataException(string.Format(UiText.ImportStreamMissingFieldsFormat, id, at));
                         foreach (var field in fields)
                         {
-                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException($"A stream field is missing \"name\"{at}"));
-                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException($"A stream field is missing \"value\"{at}"));
+                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException(string.Format(UiText.ImportStreamFieldMissingNameFormat, at)));
+                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException(string.Format(UiText.ImportStreamFieldMissingValueFormat, at)));
                         }
-                        if (command.Count == 3) throw new InvalidDataException($"Stream entry {id} has no fields{at}");
+                        if (command.Count == 3) throw new InvalidDataException(string.Format(UiText.ImportStreamNoFieldsFormat, id, at));
                         commands.Add(command.ToArray());
                     }
                     break;
                 default:
                     throw new InvalidDataException(type == null
-                        ? $"Entry has a value but no \"type\" field{at}"
-                        : $"Unsupported type \"{type}\"{at}");
+                        ? string.Format(UiText.ImportMissingTypeFormat, at)
+                        : string.Format(UiText.ImportUnsupportedTypeFormat, type, at));
             }
-            if (commands.Count == 0) throw new InvalidDataException($"An empty {type} cannot be restored{at}");
+            if (commands.Count == 0) throw new InvalidDataException(string.Format(UiText.ImportEmptyValueFormat, type, at));
             long legacyTtl = -1;
             if (entry.TryGetValue("ttl", out var ttlObj) && ttlObj != null)
             {
                 if (!long.TryParse(ttlObj.ToString(), out legacyTtl))
-                    throw new InvalidDataException($"The \"ttl\" field is not a number{at}");
-                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException($"The \"ttl\" field is out of range{at}");
+                    throw new InvalidDataException(string.Format(UiText.ImportTtlNotNumberFormat, at));
+                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException(string.Format(UiText.ImportTtlOutOfRangeFormat, at));
                 if (legacyTtl == 0) return false;
             }
             var imported = (long)database.ScriptEvaluate(

@@ -338,7 +338,7 @@ namespace RedisGuiManager
 
         private static string FormatTTL(TimeSpan ttl)
         {
-            if (ttl.TotalSeconds < 0) return "permanent (no TTL)";
+            if (ttl.TotalSeconds < 0) return UiText.PermanentNoTtl;
 
             int days = (int)ttl.TotalDays;
             int hours = ttl.Hours;

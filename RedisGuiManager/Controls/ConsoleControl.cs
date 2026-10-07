@@ -98,7 +98,9 @@ namespace RedisGuiManager
 
 				try
 				{
-                    if (client.Settings.read_only && Utils.IsReadOnlyCommandAllowed(cmd) == false)
+                    // The gate needs the whole command, not just the verb: read-only families such as
+                    // CONFIG GET, CLIENT LIST or XINFO STREAM are only recognised with their subcommand.
+                    if (client.Settings.read_only && Utils.IsReadOnlyCommandAllowed(textBox_input.Text) == false)
                         throw new InvalidOperationException($"[{cmd}] is not allowed in read-only mode");
                     var result = redis.Execute(cmd, args);
                     if (result.IsNull)

@@ -31,7 +31,7 @@ namespace RedisGuiManager
             // Keyspace notifications ride on pattern subscription, so they fit naturally here.
             var keyspaceButton = new Button
             {
-                Text = "Watch keyspace events",
+                Text = UiText.PubSubKeyspaceButton,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 Size = new Size(170, textBox_channel.Height),
                 UseVisualStyleBackColor = true
@@ -53,7 +53,7 @@ namespace RedisGuiManager
         private void FormPubSub_Load(object sender, EventArgs e)
         {
             Icon = Icon.FromHandle(Properties.Resources.console.GetHicon());
-            Text = $"Pub/Sub - {redisClient.Settings.name} [{redisClient.Settings.host}:{redisClient.Settings.port}]";
+            Text = string.Format(UiText.PubSubWindowTitleFormat, redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port);
 
             try
             {
@@ -63,7 +63,7 @@ namespace RedisGuiManager
                 if (subscriber == null)
                 {
                     MessageBox.Show(UiText.SubscriberUnavailable,
-                        "Pub/Sub", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        UiText.PubSubTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
@@ -89,7 +89,7 @@ namespace RedisGuiManager
 
             if (subscriptions.ContainsKey(channel))
             {
-                MessageBox.Show($"Already subscribed to [{channel}]");
+                MessageBox.Show(string.Format(UiText.PubSubAlreadySubscribedFormat, channel));
                 return;
             }
 
@@ -118,9 +118,9 @@ namespace RedisGuiManager
 
                 subscriptions[channel] = queue;
 
-                listBox_channels.Items.Add(isPattern ? $"{channel}  (pattern)" : channel);
+                listBox_channels.Items.Add(isPattern ? string.Format(UiText.PubSubPatternSuffix, channel) : channel);
                 textBox_channel.Clear();
-                label_sub_count.Text = $"Subscriptions: {subscriptions.Count}";
+                label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count);
             }
             catch (Exception ex)
             {
@@ -145,7 +145,7 @@ namespace RedisGuiManager
                     queue.Unsubscribe();
                     subscriptions.Remove(channel);
                     listBox_channels.Items.Remove(channel);
-                    label_sub_count.Text = $"Subscriptions: {subscriptions.Count}";
+                    label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count);
                 }
                 catch (Exception ex)
                 {
@@ -175,7 +175,7 @@ namespace RedisGuiManager
             try
             {
                 long receivers = subscriber.Publish(RedisChannel.Literal(channel), message);
-                toolStripStatusLabel1.Text = $"Published to {channel}, {receivers} receiver(s)";
+                toolStripStatusLabel1.Text = string.Format(UiText.PubSubPublishedFormat, channel, receivers);
             }
             catch (Exception ex)
             {
@@ -224,7 +224,7 @@ namespace RedisGuiManager
                             string key = separator >= 0 && source.Length > separator + 3
                                 ? source.Substring(separator + 3)
                                 : source;
-                            AppendMessage($"{key}  (db{ExtractDatabase(source)})", payload);
+                            AppendMessage(string.Format(UiText.PubSubKeyspaceDbFormat, key, ExtractDatabase(source)), payload);
                         }));
                     }
                     catch (ObjectDisposedException)
@@ -236,14 +236,11 @@ namespace RedisGuiManager
                 });
 
                 keyspaceSubscription = queue;
-                listBox_channels.Items.Add("__keyspace@*__:key  (keyspace notifications)");
-                label_sub_count.Text = $"Subscriptions: {subscriptions.Count + 1}";
+                listBox_channels.Items.Add(UiText.PubSubKeyspaceChannelLabel);
+                label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count + 1);
 
-                MessageBox.Show(this,
-                    "Watching keyspace notifications for every database.\r\n\r\n" +
-                    "You will only see events if the server has notify-keyspace-events enabled " +
-                    "(for example: CONFIG SET notify-keyspace-events \"KEA\").",
-                    "Keyspace notifications", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, UiText.PubSubKeyspaceInfo, UiText.PubSubKeyspaceTitle,
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -277,7 +274,7 @@ namespace RedisGuiManager
             if (message != null && message.Length > MaxMessageLength)
             {
                 message = message.Substring(0, MaxMessageLength) +
-                          $"... [{message.Length - MaxMessageLength:N0} more characters truncated]";
+                          string.Format(UiText.PubSubMessageTruncatedFormat, message.Length - MaxMessageLength);
             }
 
             int row = dataGridView_messages.Rows.Add(
@@ -305,7 +302,7 @@ namespace RedisGuiManager
 
             if (droppedMessages > 0)
             {
-                toolStripStatusLabel1.Text = $"{dataGridView_messages.Rows.Count} shown · {droppedMessages:N0} older messages dropped";
+                toolStripStatusLabel1.Text = string.Format(UiText.PubSubDroppedFormat, dataGridView_messages.Rows.Count, droppedMessages);
             }
         }
 

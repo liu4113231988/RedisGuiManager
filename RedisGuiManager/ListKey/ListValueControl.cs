@@ -242,7 +242,7 @@ namespace RedisGuiManager
                     new StackExchange.Redis.RedisKey[] { stringKeyName },
                     new StackExchange.Redis.RedisValue[] { index, valueControl.OriginalValue, save_text });
             }
-            catch (StackExchange.Redis.RedisException ex) { MessageBox.Show(ex.Message, "Save failed"); return; }
+            catch (StackExchange.Redis.RedisException ex) { MessageBox.Show(ex.Message, UiText.SaveFailed); return; }
             valueControl.AcceptChanges();
             await RefreshKeyAsync();
         }

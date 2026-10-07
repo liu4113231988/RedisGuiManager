@@ -302,7 +302,7 @@ namespace RedisGuiManager
                     new StackExchange.Redis.RedisKey[] { stringKeyName },
                     new RedisValue[] { selectField, valueControl.OriginalValue, save_text });
             }
-            catch (RedisException ex) { MessageBox.Show(ex.Message, "Save failed"); return; }
+            catch (RedisException ex) { MessageBox.Show(ex.Message, UiText.SaveFailed); return; }
             valueControl.AcceptChanges();
             await RefreshKeyAsync();
         }

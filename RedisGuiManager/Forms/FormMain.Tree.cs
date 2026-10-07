@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using StackExchange.Redis;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -153,7 +154,7 @@ namespace RedisGuiManager
                                 {
                                     select.ImageKey = old_imagekey;
                                     select.SelectedImageKey = old_imagekey;
-                                    MessageBox.Show(string.Format("Select [{0}] DB {1} fail\r\n", redisClient.Settings.ToString(), dbSettings.DBNumber) + change.Message);
+                                    MessageBox.Show(string.Format(UiText.SelectDbFailedFormat, redisClient.Settings.ToString(), dbSettings.DBNumber) + Environment.NewLine + change.Message);
 
                                     return;
                                 }
@@ -161,7 +162,11 @@ namespace RedisGuiManager
                                 redisClient.DBBlock = dbSettings.DBNumber;
                             }
 
-                            toolStripStatusLabel1.Text = $"{redisClient.Settings.name} · DB {dbSettings.DBNumber} · {(redisClient.IsConnected ? "Connected" : "Disconnected")} {(redisClient.Settings.read_only ? "· read-only" : "")}";
+                            toolStripStatusLabel1.Text = string.Format(UiText.KeyStatusFormat,
+                                redisClient.Settings.name,
+                                dbSettings.DBNumber,
+                                redisClient.IsConnected ? UiText.ConnectedStatus : UiText.DisconnectedStatus,
+                                redisClient.Settings.read_only ? UiText.ReadOnlyStatusSuffix : "");
                             // Redis is null once a connection was closed or never established.
                             if (redisClient.Redis == null) { select.ImageKey = old_imagekey; select.SelectedImageKey = old_imagekey; return; }
                             var type = redisClient.Redis.KeyType(select.Text);
@@ -199,7 +204,7 @@ namespace RedisGuiManager
                                 break;
                                 default:
                                 {
-                                    MessageBox.Show($"key {select.Text} is not exist");
+                                    MessageBox.Show(string.Format(UiText.KeyNotExistFormat, select.Text));
                                 }
                                 break;
                             }
@@ -218,7 +223,7 @@ namespace RedisGuiManager
             }
             catch (RedisException ex)
             {
-                MessageBox.Show(this, ex.Message + "\nReload the connection to retry.", "Redis request failed");
+                MessageBox.Show(this, ex.Message + Environment.NewLine + UiText.RedisReloadHint, UiText.RedisRequestFailedTitle);
             }
             catch (Exception ex)
             {
@@ -317,7 +322,7 @@ namespace RedisGuiManager
 
                 BuildTreeNode_DB(select, filter_list_keys);
                 if (dbSettings.HasMoreKeys)
-                    select.Nodes.Add(new TreeNode("Load next 500 keys…") { Tag = (Action)(() => RunGuardedAsync(() => LoadDbKeyPageAsync(select))) });
+                    select.Nodes.Add(new TreeNode(UiText.LoadNextKeysLabel) { Tag = (Action)(() => RunGuardedAsync(() => LoadDbKeyPageAsync(select))) });
             }
         }
 
@@ -343,7 +348,7 @@ namespace RedisGuiManager
             if (ex == null || IsDisposed || Disposing || shuttingDown) return;
             try
             {
-                MessageBox.Show(this, ex.Message, "Operation failed; refresh before retrying", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, ex.Message, UiText.OperationFailedRefresh, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch
             {
@@ -368,12 +373,12 @@ namespace RedisGuiManager
                 if (reload && !redisClient.IsConnected) redisClient.Close();
                 if (redisClient.Redis == null)
                 {
-                    var connectOutcome = await OperationDialog.RunAsync(this, "Connect", (token, progress) => redisClient.Connect());
+                    var connectOutcome = await OperationDialog.RunAsync(this, UiText.ConnectTitle, (token, progress) => redisClient.Connect());
                     if (!connectOutcome.IsSuccess) return;
                     var connect = connectOutcome.Value;
                     if (connect.IsSuccess == false)
                     {
-                        MessageBox.Show(string.Format("Failed to connect to redis[{0}] IpAddress:{1} Port:{2}\r\n", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port) + connect.Message);
+                        MessageBox.Show(string.Format(UiText.ConnectFailedDetailFormat, redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port) + Environment.NewLine + connect.Message);
 
                         return;
                     }
@@ -438,7 +443,7 @@ namespace RedisGuiManager
         private async Task LoadDbKeyPageAsync(TreeNode node)
         {
             var db = (DbSettings)node.Tag;
-            var outcome = await OperationDialog.RunAsync(this, "Load keys", (token, progress) =>
+            var outcome = await OperationDialog.RunAsync(this, UiText.LoadKeysTitle, (token, progress) =>
             {
                 var page = new List<string>();
                 bool more = true;
@@ -463,8 +468,8 @@ namespace RedisGuiManager
             if (!db.HasMoreKeys) { db.KeyScan.Dispose(); db.KeyScan = null; }
             FilterKeys(node);
             node.Expand();
-            if (result.Error != null) MessageBox.Show(this, result.Error + "\nAlready loaded keys remain; reload to retry.", "Key scan failed");
-            if (result.Canceled) toolStripStatusLabel1.Text = "Key scan paused; use Load next to continue";
+            if (result.Error != null) MessageBox.Show(this, string.Format(UiText.KeyScanFailedDetailFormat, result.Error), UiText.KeyScanFailedTitle);
+            if (result.Canceled) toolStripStatusLabel1.Text = UiText.KeyScanPausedStatus;
         }
 
         private void BuildTreeNode_Folder(TreeNode parent)
@@ -590,7 +595,7 @@ namespace RedisGuiManager
                 {
                     if (msg_box)
                     {
-                        MessageBox.Show($"Could not read the key count for db{dbNum}. The server may be unreachable.");
+                        MessageBox.Show(string.Format(UiText.KeyCountFailedFormat, dbNum));
                     }
 
                     return false;

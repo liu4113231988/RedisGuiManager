@@ -75,7 +75,7 @@ namespace RedisGuiManager
         {
             ClearAll();
 
-            this.Text = "Redis Gui Manager";
+            this.Text = UiText.MainWindowTitle;
             _knownFiles.Clear();
             _failedFiles.Clear();
             var loadErrors = new List<string>();
@@ -122,7 +122,7 @@ namespace RedisGuiManager
                         catch (JsonReaderException jex)
                         {
                             // 单对象或损坏的 JSON：尝试包一层或记录错误后跳过
-                            throw new Exception($"JSON 格式错误: {jex.Message}", jex);
+                            throw new Exception(string.Format(UiText.ConnectionsJsonErrorFormat, jex.Message), jex);
                         }
                         foreach (var j in json_parsed)
                         {
@@ -143,7 +143,7 @@ namespace RedisGuiManager
                                 // 基础字段校验：name/host 为空的视为脏数据跳过
                                 if (string.IsNullOrWhiteSpace(setting.name) && string.IsNullOrWhiteSpace(setting.host))
                                 {
-                                    loadErrors.Add($"{Path.GetFileName(path)}: 跳过无名无 host 的条目");
+                                    loadErrors.Add(string.Format(UiText.ConnectionsSkippedEntryFormat, Path.GetFileName(path)));
                                     continue;
                                 }
                                 redis_settings.Add(setting);
@@ -155,7 +155,7 @@ namespace RedisGuiManager
                     catch (Exception ex)
                     {
                         _failedFiles.Add(fullPath);
-                        string msg = $"Load failed: {Path.GetFileName(path)} - {ex.Message}";
+                        string msg = string.Format(UiText.ConnectionLoadFailedFormat, Path.GetFileName(path), ex.Message);
                         loadErrors.Add(msg);
                     }
                 }
@@ -193,7 +193,7 @@ namespace RedisGuiManager
             }
 
             LoadRedisSettings();
-            string summary = $"Loaded {redis_settings.Count + redis_group.Sum(g => g.connections.Count)} connections from {_knownFiles.Count} file(s)";
+            string summary = string.Format(UiText.ConnectionsLoadedFormat, redis_settings.Count + redis_group.Sum(g => g.connections.Count), _knownFiles.Count);
             if (loadErrors.Count > 0)
                 toolStripStatusLabel1.Text = summary + " | " + string.Join(" | ", loadErrors.Take(2));
             else
@@ -204,7 +204,7 @@ namespace RedisGuiManager
         {
             ClearAll();
 
-            this.Text = string.Format("Redis Gui Manager ({0})", Path.GetFileNameWithoutExtension(path));
+            this.Text = string.Format(UiText.MainWindowTitleWithNameFormat, Path.GetFileNameWithoutExtension(path));
             string fullPath = Path.GetFullPath(path);
             _knownFiles.Add(fullPath);
 
@@ -245,7 +245,7 @@ namespace RedisGuiManager
             LoadRedisSettings();
         }
 
-        private async void groups_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private void groups_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (!ValueControl.ConfirmAll(panel1)) return;
 
@@ -285,13 +285,12 @@ namespace RedisGuiManager
 
             SaveRedisSettings();
 
-            TreeNode selected = treeView_server.SelectedNode;
-            if (selected != null)
-            {
-                await RefreshRedisKeyAsync(selected, true);
-            }
+            // The tree mirrors the group structure, so it has to be rebuilt: a rename changes a
+            // node's text, and moving a connection changes which node owns it. Only the nodes are
+            // rebuilt; the connection objects and their live sessions are reused unchanged.
+            LoadRedisSettings();
 
-            toolStripStatusLabel1.Text = $"Groups updated: {redis_group.Count} group(s), {redis_settings.Count} ungrouped";
+            toolStripStatusLabel1.Text = string.Format(UiText.ConnectionsGroupsUpdatedFormat, redis_group.Count, redis_settings.Count);
         }
 
         private static HashSet<string> GroupedConnectionNames(IEnumerable<RedisGroup> groups) =>
@@ -385,7 +384,16 @@ namespace RedisGuiManager
             client.ConnectionStatusChanged += status =>
             {
                 if (!IsHandleCreated || IsDisposed) return;
-                try { BeginInvoke((Action)(() => { if (!IsDisposed) toolStripStatusLabel1.Text = $"{client.Settings.name}: {status}{(client.Settings.read_only ? " · read-only" : "")}"; })); }
+                try
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        if (IsDisposed) return;
+                        toolStripStatusLabel1.Text = client.Settings.read_only
+                            ? string.Format(UiText.ConnectionStatusReadOnlyFormat, client.Settings.name, status)
+                            : string.Format(UiText.ConnectionStatusFormat, client.Settings.name, status);
+                    }));
+                }
                 catch (InvalidOperationException) { }
             };
             return client;
