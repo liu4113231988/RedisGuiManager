@@ -55,6 +55,20 @@ namespace RedisGuiManager
             valueControl.ProtectSelection(dataGridView_stream);
             GridUi.LimitCellText(dataGridView_stream);
 
+            // Consumer groups, pending entries and stream internals live in their own window.
+            var groupInfo = new Button
+            {
+                Text = "Groups/pending",
+                Width = 120,
+                Height = 26,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
+            groupInfo.Click += (s, e) => OpenStreamInfo();
+            groupInfo.Location = new Point(Width - groupInfo.Width - 12, 8);
+            Resize += (s, e) => groupInfo.Left = ClientSize.Width - groupInfo.Width - 12;
+            Controls.Add(groupInfo);
+            groupInfo.BringToFront();
+
             if (Config.darkmode > 0)
             {
                 Utils.DarkThemeControl(this);
@@ -77,6 +91,21 @@ namespace RedisGuiManager
         private async void LoadValue_Click(object sender, EventArgs e)
         {
             await RefreshKeyAsync();
+        }
+
+        private void OpenStreamInfo()
+        {
+            if (redisClient == null || database == null)
+            {
+                MessageBox.Show(this, "Redis connection error", "Stream",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!valueControl.ConfirmDiscard()) return;
+
+            FormStreamInfo form = new FormStreamInfo(redisClient, stringKeyName, database);
+            form.Show(this);
         }
 
         private async Task RefreshKeyAsync()
