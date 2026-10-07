@@ -16,9 +16,10 @@
 
 #### 二、Stream 数据类型支持
 
-- **Stream 浏览**：在树状视图中点击 Stream 类型的 Key，自动加载并展示其全部 Entry（ID + Field-Value 对）。
+- **Stream 浏览**：在树状视图中点击 Stream 类型的 Key，自动加载当前页（每页 500 条）的 Entry（ID + Field-Value 对），底部可翻页。
 - **Stream 添加**：支持通过 `StreamValueInsertForm` 弹窗添加新的 Stream Entry，可指定自定义 ID 或使用自动生成。
 - **Stream 删除**：支持删除单个 Entry。
+- **消费者组**：Stream 编辑器新增「Groups/pending」按钮，可查看 XINFO STREAM / GROUPS / CONSUMERS 与 XPENDING，并执行 XACK、XCLAIM、XTRIM。
 - **查询窗口集成**：SQL 查询窗口已新增 Stream 类型分支，支持结构化查询。
 
 ---
@@ -35,12 +36,19 @@
 
 - 右键 Redis 服务器节点 →「Server Info」，弹出仪表盘窗体。
 - 展示内容包含：
-  - Redis 版本号、运行模式（standalone / cluster / sentinel）
+  - Redis 版本号、运行模式（standalone / cluster）
   - 已连接客户端数、已用/峰值内存
   - 内存碎片率、Key 命中率（命中率/未命中率）
   - 总连接数、每秒操作数
   - 持久化（RDB / AOF）状态
 - 支持「刷新」按钮实时获取最新信息。
+- **Server tools**：右键 Redis 服务器节点 →「Server tools」，提供六个选项卡：
+  - **Configuration**：`CONFIG GET` 浏览，`CONFIG SET` 修改（修改前确认，并提示不可撤销）
+  - **Clients**：`CLIENT LIST` 列表与 `CLIENT KILL`
+  - **Memory**：`MEMORY USAGE` / `MEMORY STATS` / `MEMORY DOCTOR`
+  - **Persistence**：RDB / AOF 状态与 `LASTSAVE`，以及 `SAVE` / `BGSAVE` / `BGREWRITEAOF`
+  - **Cluster**：`CLUSTER NODES` 拓扑与节点汇总
+  - **Diagnostics**：按 Key 查看 `OBJECT` 属性与 `MEMORY USAGE`，以及 `SENTINEL` 集群信息
 
 ---
 
@@ -92,6 +100,30 @@
   - Cluster 模式下仅显示 db 0（集群模式限制），避免无效 DB 操作。
   - 自动禁用 SSH 隧道选项（与集群多节点隧道冲突）。
 - 兼容 SSL/TLS 加密连接。
+
+---
+
+#### 九、String 工具（位图 / HyperLogLog / LCS）
+
+Redis 中位图、HyperLogLog、地理集合都以字符串编码存储，`TYPE` 返回 `string`，因此它们在 String 编辑器中打开。新增「String tools」面板补齐解释这些结构的命令：
+
+- **BITCOUNT**：统计区间内置位数量，可切换按字节或按位索引。
+- **BITPOS**：查找区间内第一个 0 / 1 的位置。
+- **GETRANGE**：截取区间内容并显示（超长自动截断显示）。
+- **PFCOUNT**：估算 HyperLogLog 的不同元素数量。
+- **PFMERGE**：把另一个 Key 合并进当前 Key（写操作，需确认，会同时改动两个 Key）。
+- **LCS**：求两个 Key 的最长公共子序列长度（需要 Redis 7.0+）。
+
+结果按时间倒序显示在面板内；命令失败（如 Key 类型不符）会在结果行显示原因，不弹窗打断。
+
+---
+
+#### 十、连接分组管理
+
+- 右键 →「Manage groups」，可新建、重命名、删除分组，并勾选调整分组成员。
+- 一个连接只能属于一个分组（与持久化结构一致）；在分组中取消勾选即把该连接移回顶层。
+- 删除分组时其连接会保留并降级回顶层，确认框会提示受影响的连接数量。
+- 编辑以快照方式进行，取消即真正取消。
 
 ---
 

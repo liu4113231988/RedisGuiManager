@@ -89,6 +89,32 @@ static class RegressionChecks
             "Group member was cloned instead of reusing the live connection");
     }
 
+    // The string-tools panel is built in code and docks to the bottom; make sure it does not swallow
+    // the editor above it or spill outside its own group box.
+    static void CheckStringToolsLayout()
+    {
+        using var editor = new StringValueControl();
+        var group = editor.Controls.OfType<GroupBox>().FirstOrDefault();
+        Check(group != null, "String tools panel missing");
+        Check(group.Dock == DockStyle.Bottom, "String tools panel is not docked to the bottom");
+
+        var list = group.Controls.OfType<ListBox>().FirstOrDefault();
+        Check(list != null, "String tools results list missing");
+
+        var buttons = group.Controls.OfType<Button>().ToArray();
+        Check(buttons.Length >= 6, $"Expected the bit/HyperLogLog/LCS buttons, found {buttons.Length}");
+
+        // Buttons must sit below the results list, not on top of it.
+        int listBottom = list.Bottom;
+        foreach (var button in buttons)
+        {
+            Check(button.Top >= listBottom,
+                $"Button '{button.Text}' overlaps the results list (button top {button.Top}, list bottom {listBottom})");
+            Check(button.Right <= group.ClientSize.Width,
+                $"Button '{button.Text}' spills outside the panel");
+        }
+    }
+
     static void CheckFeatures()
     {
         var flags = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -99,6 +125,7 @@ static class RegressionChecks
         var copy = JsonConvert.DeserializeObject<RedisSettings>(JsonConvert.SerializeObject(settings));
         Check(copy.username == "inspector" && copy.read_only, "ACL/readonly settings not persisted");
         CheckGroupEditing();
+        CheckStringToolsLayout();
         using (var root = new Panel())
         using (var editor = new ValueControl())
         {
