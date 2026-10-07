@@ -225,9 +225,11 @@ namespace RedisGuiManager
 						{
                             TreeNode node = GetTreeNode_DB(dbNum, select);
                             if (node != null)
-							{
+                            {
                                 treeView_server.SelectedNode = node;
-							}
+                                // Jumping to a database is a navigation action, so show its keys.
+                                RunGuardedAsync(() => SelectNodeAsync(node));
+                            }
 						}
 					}
 					else

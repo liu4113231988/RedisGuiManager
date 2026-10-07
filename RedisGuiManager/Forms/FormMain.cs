@@ -155,9 +155,24 @@ namespace RedisGuiManager
 
             treeView_server.SelectedNode = null;
 
-            treeView_server.AfterSelect += treeView_server_AfterSelect;
+            // Selecting a node no longer loads it: a single click only moves the highlight. The
+            // double-click handler is wired as a lambda so the compiler infers the event argument
+            // type and LoadTreeNode stays a plain TreeNode method.
             treeView_server.MouseDown += treeView_server_MouseDown;
-            treeView_server.MouseUp += treeView_server_MouseUp;
+            treeView_server.NodeMouseDoubleClick += (sender, e) =>
+            {
+                if (e.Button == MouseButtons.Left) LoadTreeNode(e.Node);
+            };
+            // Enter is the keyboard equivalent of the double-click. It is handled on the tree itself
+            // rather than in ProcessCmdKey so it cannot swallow Enter inside the editor's text boxes.
+            treeView_server.KeyDown += (sender, e) =>
+            {
+                if (e.KeyCode == Keys.Enter && treeView_server.SelectedNode != null)
+                {
+                    LoadTreeNode(treeView_server.SelectedNode);
+                    e.Handled = true;
+                }
+            };
         }
 
         private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
@@ -286,6 +301,8 @@ namespace RedisGuiManager
             if (renamed != null)
             {
                 treeView_server.SelectedNode = renamed;
+                // Selecting no longer loads, and the rename should land on the renamed key.
+                RunGuardedAsync(() => SelectNodeAsync(renamed));
             }
             else
             {

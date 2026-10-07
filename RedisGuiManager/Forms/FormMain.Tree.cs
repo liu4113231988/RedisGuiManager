@@ -16,15 +16,13 @@ namespace RedisGuiManager
         {
             if (e.Button == MouseButtons.Right)
             {
-                treeView_server.AfterSelect -= treeView_server_AfterSelect;
-
+                // Right-click only moves the selection. Loading is a double-click action now, so
+                // there is no handler to detach while the selection changes.
                 TreeNode node = treeView_server.GetNodeAt(e.Location);
                 if (treeView_server.SelectedNode != node)
                 {
                     treeView_server.SelectedNode = node;
                 }
-
-                treeView_server.AfterSelect += treeView_server_AfterSelect;
 
                 TreeNode select = treeView_server.SelectedNode;
                 if (select == null)
@@ -54,48 +52,24 @@ namespace RedisGuiManager
             }
         }
 
-        private void treeView_server_MouseUp(object sender, MouseEventArgs e)
+        /// <summary>
+        /// Loads a node: a connection, database or folder materialises its children and a key opens
+        /// its value editor. A single click only moves the selection, so clicking through a wide tree
+        /// no longer starts a scan per node.
+        /// </summary>
+        private void LoadTreeNode(TreeNode node)
         {
-            if (e.Button == MouseButtons.Left)
+            if (node == null) return;
+
+            RunGuardedAsync(async () =>
             {
-                bool is_same_node = false;
-                TreeNode node = treeView_server.GetNodeAt(e.Location);
-                if (treeView_server.SelectedNode != node)
-                {
-                    treeView_server.SelectedNode = node;
-                }
-                else
-                {
-                    is_same_node = true;
-                }
+                bool hadChildren = node.Nodes.Count > 0;
+                await SelectNodeAsync(node);
 
-                TreeNode select = treeView_server.SelectedNode;
-                if (select == null)
-                {
-                    return;
-                }
-
-                if (is_same_node)
-                {
-                    RunGuardedAsync(() => SelectNodeAsync(select));
-                }
-
-                if (select.IsExpanded)
-                {
-                    select.Collapse();
-                }
-                else
-                {
-                    select.Expand();
-                }
-            }
-        }
-
-        private async void treeView_server_AfterSelect(object sender, TreeViewEventArgs e)
-        {
-            TreeNode select = treeView_server.SelectedNode;
-            if (select == null) return;
-            await SelectNodeAsync(select);
+                // A node that only just received its children has no expander yet, so open it here.
+                // An already populated node is left to the TreeView's own double-click behaviour.
+                if (hadChildren == false && node.Nodes.Count > 0) node.Expand();
+            });
         }
 
         /// <summary>
