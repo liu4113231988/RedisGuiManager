@@ -71,15 +71,19 @@ namespace RedisGuiManager
             sqlite_con.Open();
             sqlite_con.EnableExtensions(true);
 
-            // The JSON1 extension lives in SQLite.Interop.dll; load it from the app directory
-            // first and fail with an actionable message instead of a raw DllNotFoundException.
-            if (TryLoadJsonExtension() == false)
+            // JSON has been compiled into SQLite itself since 3.38, so a normal build needs no
+            // extension at all. Probe the functions first: loading "sqlite3_json_init" actually
+            // fails because that entry point no longer exists, which used to raise a false alarm
+            // in front of the window on every single open.
+            if (EnsureJsonSupport() == false)
             {
                 MessageBox.Show(
-                    "The SQLite JSON1 extension could not be loaded.\r\n\r\n" +
-                    $"Expected: {Path.Combine(AppContext.BaseDirectory, "SQLite.Interop.dll")}\r\n" +
-                    $"Process architecture: {(IntPtr.Size == 8 ? "x64" : "x86")}\r\n\r\n" +
-                    "JSON functions (json_extract, json_each, ...) are unavailable in this session.",
+                    "The SQLite JSON functions are not available in this session.\r\n\r\n" +
+                    "Everything else in the query window keeps working - only the JSON helpers " +
+                    "(json_extract, json_each, json_tree, ...) are disabled.\r\n\r\n" +
+                    $"SQLite version: {SqliteVersion()} (JSON is built in since 3.38)\r\n" +
+                    $"Expected extension: {Path.Combine(AppContext.BaseDirectory, "SQLite.Interop.dll")}\r\n" +
+                    $"Process architecture: {(IntPtr.Size == 8 ? "x64" : "x86")}",
                     "Query window", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
@@ -116,8 +120,14 @@ namespace RedisGuiManager
             autocompleteMenu.ImageList = imageList;
         }
 
-        private bool TryLoadJsonExtension()
+        /// <summary>
+        /// Confirms the JSON functions really are usable. They are part of SQLite core from 3.38
+        /// onwards, so a loadable extension is only a fallback for an older or trimmed build.
+        /// </summary>
+        private bool EnsureJsonSupport()
         {
+            if (JsonFunctionsAvailable()) return true;
+
             // Preferred: resolve next to the executable, then fall back to the default probe path.
             string dllPath = Path.Combine(AppContext.BaseDirectory, "SQLite.Interop.dll");
             foreach (string candidate in new[] { dllPath, "SQLite.Interop.dll" })
@@ -125,15 +135,44 @@ namespace RedisGuiManager
                 try
                 {
                     sqlite_con.LoadExtension(candidate, "sqlite3_json_init");
-                    return true;
+                    if (JsonFunctionsAvailable()) return true;
                 }
                 catch (Exception)
                 {
-                    // Try the next candidate; a missing or mismatched DLL must not abort startup.
+                    // Missing entry point or a mismatched DLL; try the next candidate and otherwise
+                    // report the real limitation instead of pretending the extension is required.
                 }
             }
 
             return false;
+        }
+
+        private bool JsonFunctionsAvailable()
+        {
+            try
+            {
+                using var command = sqlite_con.CreateCommand();
+                command.CommandText = "select json_type('{\"probe\":1}','$.probe')";
+                return command.ExecuteScalar() != null;
+            }
+            catch (SQLiteException)
+            {
+                return false;
+            }
+        }
+
+        private string SqliteVersion()
+        {
+            try
+            {
+                using var command = sqlite_con.CreateCommand();
+                command.CommandText = "select sqlite_version()";
+                return command.ExecuteScalar()?.ToString() ?? "unknown";
+            }
+            catch (SQLiteException)
+            {
+                return "unknown";
+            }
         }
 
         private void FormQueryWindow_Shown(object sender, EventArgs e)
