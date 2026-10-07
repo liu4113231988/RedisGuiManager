@@ -36,8 +36,17 @@ namespace RedisGuiManager
     /// </summary>
     public sealed class OperationDialog : Form
     {
+        /// <summary>
+        /// How long an operation may run before the progress window appears. Showing it
+        /// immediately made every quick tree selection flash an empty dialog on screen.
+        /// </summary>
+        private const int ShowDelayMilliseconds = 250;
+
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private readonly Label status = new Label { Dock = DockStyle.Fill, Padding = new Padding(12), AutoEllipsis = true };
+
+        /// <summary>Last progress text, buffered so a window revealed late still starts with content.</summary>
+        private string pendingMessage;
 
         private OperationDialog(string title)
         {
@@ -75,17 +84,53 @@ namespace RedisGuiManager
                 {
                     // IsDisposed stays false after the user closes the window with X, so check the
                     // handle instead: writing to a destroyed control would throw.
-                    if (!dialog.IsDisposed && dialog.IsHandleCreated) dialog.status.Text = message;
+                    if (dialog.IsDisposed) return;
+
+                    // Before the window exists the text is buffered, otherwise a dialog revealed
+                    // after the first report would open empty.
+                    if (dialog.IsHandleCreated) dialog.status.Text = message;
+                    else dialog.pendingMessage = message;
                 });
 
+                System.Windows.Forms.Timer reveal = null;
                 if (showProgressWindow)
                 {
-                    // Show() rather than ShowDialog(): the caller keeps running and the user can
-                    // keep working while the operation proceeds.
-                    dialog.Show(Control.FromHandle(owner?.Handle ?? IntPtr.Zero));
+                    Control parent = null;
+                    try { parent = Control.FromHandle(owner?.Handle ?? IntPtr.Zero); }
+                    catch { /* a destroyed owner simply means the dialog runs unowned */ }
+
+                    // Show() rather than ShowDialog(): the caller keeps running and the user can keep
+                    // working while the operation proceeds. The reveal is delayed and is cancelled
+                    // when the work finishes first, so quick operations never flash a window.
+                    reveal = new System.Windows.Forms.Timer { Interval = ShowDelayMilliseconds };
+                    reveal.Tick += (s, e) =>
+                    {
+                        ((System.Windows.Forms.Timer)s).Stop();
+                        if (dialog.IsDisposed || dialog.IsHandleCreated) return;
+
+                        if (string.IsNullOrEmpty(dialog.pendingMessage) == false)
+                        {
+                            dialog.status.Text = dialog.pendingMessage;
+                        }
+
+                        try { dialog.Show(parent); }
+                        catch { /* the owner disappeared; the operation still runs to completion */ }
+                    };
+                    reveal.Start();
                 }
 
-                value = await Task.Run(() => action(dialog.cancellation.Token, progress));
+                try
+                {
+                    value = await Task.Run(() => action(dialog.cancellation.Token, progress));
+                }
+                finally
+                {
+                    if (reveal != null)
+                    {
+                        reveal.Stop();
+                        reveal.Dispose();
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -93,7 +138,9 @@ namespace RedisGuiManager
             }
             finally
             {
-                if (!dialog.IsDisposed) dialog.Close();
+                // A fast operation never revealed the window, so only close a form that was actually
+                // shown; Dispose() alone is enough for the rest.
+                if (!dialog.IsDisposed && dialog.IsHandleCreated) dialog.Close();
                 dialog.Dispose();
             }
 

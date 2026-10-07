@@ -38,32 +38,6 @@ namespace RedisGuiManager
         /// </summary>
         private HashSet<string> _ownedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Application.DoEvents() runs a nested message loop and is therefore re-entrant: it can
-        // dispatch another selection change (or a tree edit) while the first one is still loading,
-        // which corrupts the node being populated. This wrapper keeps the loading icon responsive
-        // but never lets two pumps overlap.
-        private bool pumpingUi;
-
-        private void PumpUi()
-        {
-            if (IsDisposed || Disposing || !IsHandleCreated) return;
-            if (pumpingUi) return;
-
-            pumpingUi = true;
-            try
-            {
-                Application.DoEvents();
-            }
-            catch (Exception)
-            {
-                // Never let a nested-pump failure break node loading.
-            }
-            finally
-            {
-                pumpingUi = false;
-            }
-        }
-
         // Application-level shortcuts. ProcessCmdKey is consulted before the focused control, so
         // this needs no KeyPreview; the handlers behind the menu items already no-op when the
         // selected node is not the right kind.

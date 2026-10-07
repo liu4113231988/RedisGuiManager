@@ -114,11 +114,18 @@ namespace RedisGuiManager
                 return;
             }
 
-            var old_imagekey = select.ImageKey;
-            select.ImageKey = "loading";
-            select.SelectedImageKey = "loading";
-            treeView_server.Invalidate(true);
-            PumpUi();
+            // Only a node that really talks to Redis gets the loading icon. Groups, folders whose
+            // children are already built and databases with cached keys are filled from memory, and
+            // flashing "loading" for them made every click blink. The tree is invalidated but never
+            // pumped, so the icon is painted at the first real await and a quick load skips it.
+            bool showLoading = SelectionNeedsServer(select);
+            string old_imagekey = select.ImageKey;
+            if (showLoading)
+            {
+                select.ImageKey = "loading";
+                select.SelectedImageKey = "loading";
+                treeView_server.Invalidate();
+            }
 
             try
             {
@@ -234,11 +241,35 @@ namespace RedisGuiManager
             }
             finally
             {
-                if (IsDisposed == false && Disposing == false)
+                if (showLoading && IsDisposed == false && Disposing == false)
                 {
                     select.ImageKey = old_imagekey;
                     select.SelectedImageKey = old_imagekey;
                 }
+            }
+        }
+
+        /// <summary>
+        /// True when selecting this node will actually hit the server. Groups and folders are
+        /// populated from memory, and a database whose keys are already cached needs no round trip,
+        /// so none of them should show a loading indicator.
+        /// </summary>
+        private static bool SelectionNeedsServer(TreeNode select)
+        {
+            switch (select.Tag)
+            {
+                case RedisKey _:
+                    return true;
+
+                case RedisClient client:
+                    // A fresh connection has to connect, and an empty node has to ask for its db list.
+                    return client.Redis == null || select.Nodes.Count == 0;
+
+                case DbSettings db:
+                    return db.KeyScan == null && db.Keys == null;
+
+                default:
+                    return false;
             }
         }
 
