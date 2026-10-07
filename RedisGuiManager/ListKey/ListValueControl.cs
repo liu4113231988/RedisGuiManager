@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using Newtonsoft.Json;
 
 namespace RedisGuiManager
@@ -49,6 +50,8 @@ namespace RedisGuiManager
             pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_list);
             GridUi.LimitCellText(dataGridView_list);
+            GridUi.AttachRowValueMenu(dataGridView_list,
+                () => dataGridView_list.SelectedRows.Count > 0 ? dataGridView_list.SelectedRows[0].Cells[1].Value?.ToString() ?? "" : "");
 
             if (Config.darkmode > 0)
             {
@@ -79,7 +82,7 @@ namespace RedisGuiManager
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
@@ -101,8 +104,8 @@ namespace RedisGuiManager
                 size += Encoding.UTF8.GetBytes(read[i].ToString()).Length;
             }
 
-            label_size.Text = "Size : " + Utils.GetSizeDescription(size);
-            label_length_val.Text = $"{read.Length} on this page";
+            label_size.Text = UiText.SizePrefix + Utils.GetSizeDescription(size);
+            label_length_val.Text = string.Format(UiText.RowsOnThisPage, read.Length);
 
             Utils.ControlDataGridViewRow(dataGridView_list, read.Length);
             for (int i = 0; i < read.Length; i++)
@@ -159,7 +162,7 @@ namespace RedisGuiManager
                 if (selectRow != null)
                 {
                     int selectIndex = int.Parse(selectRow.Cells[0].Value.ToString());
-                    if (MessageBox.Show(string.Format("Delete Key:{0} Index:{1}", stringKeyName, selectIndex), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                    if (MessageBox.Show(string.Format(UiText.DeleteKeyIndexPrompt, stringKeyName, selectIndex), UiText.Delete, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                     {
                         string randomValue = "Remove:" + Guid.NewGuid().ToString();
                         if ((long)await database.ScriptEvaluateAsync(
@@ -167,12 +170,12 @@ namespace RedisGuiManager
                             new StackExchange.Redis.RedisKey[] { stringKeyName },
                             new StackExchange.Redis.RedisValue[] { selectIndex, (StackExchange.Redis.RedisValue)selectRow.Cells[1].Value, randomValue }) > 0)
                         {
-                            MessageBox.Show(string.Format("Delete index:{0} success", selectIndex));
+                            MessageBox.Show(string.Format(UiText.DeleteIndexSuccess, selectIndex));
                             await RefreshKeyAsync();
                         }
                         else
                         {
-                            MessageBox.Show(string.Format("Delete index:{0} fail", selectIndex));
+                            MessageBox.Show(string.Format(UiText.DeleteIndexFailed, selectIndex));
                         }
                     }
                 }
@@ -180,7 +183,7 @@ namespace RedisGuiManager
             }
             catch (StackExchange.Redis.RedisException ex)
             {
-                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+                MessageBox.Show(ex.Message, UiText.OperationFailedRefresh);
             }
         }
 
@@ -205,39 +208,9 @@ namespace RedisGuiManager
             }
         }
 
-        private void dataGridView_list_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            if (e.ColumnIndex == -1 || e.RowIndex == -1)
-                return;
-
-            if (e.Button == MouseButtons.Right)
-            {
-                dataGridView_list.Rows[e.RowIndex].Selected = true;
-
-                Rectangle cellRect = dataGridView_list.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                Point ptLoc = new Point(cellRect.Left + e.Location.X, cellRect.Top + e.Location.Y);
-
-                show_context_menu(dataGridView_list, ptLoc);
-            }
-        }
-
-        private void show_context_menu(Control c, Point p)
-        {
-            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
-        }
-
-        private void CM_json_viewer()
-        {
-            if (dataGridView_list.SelectedRows.Count <= 0) return;
-
-            FormJsonViewer fjv = new FormJsonViewer();
-            fjv.Show();
-            fjv.JsonText = dataGridView_list.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
-        }
-
         private async void button_save_Click(object sender, EventArgs e)
         {
-            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show("Binary/Hex values are read-only"); return; }
+            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show(UiText.ReadOnlyBinaryValue); return; }
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_list.SelectedRows.Count <= 0)
             {

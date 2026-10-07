@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -43,15 +44,71 @@ namespace RedisGuiManager
         public static void ShowValueContextMenu(Control owner, Point location, Action onOpenViewer, Action onRemove = null)
         {
             var menu = new ContextMenuStrip();
-            menu.Items.Add("Json viewer", null, (s, e) => onOpenViewer?.Invoke());
+            menu.Items.Add(UiText.MenuJsonViewer, null, (s, e) => onOpenViewer?.Invoke());
             if (onRemove != null)
             {
-                menu.Items.Add("Remove selected keys", null, (s, e) => onRemove());
+                menu.Items.Add(UiText.MenuRemoveSelectedKeys, null, (s, e) => onRemove());
             }
 
             // Show() is asynchronous, so the menu is only disposed after it closes.
             menu.Closed += (s, e) => menu.Dispose();
             menu.Show(owner, location);
+        }
+
+        /// <summary>
+        /// Attaches the whole "right-click a cell -> open the JSON viewer" behaviour to a grid so
+        /// each value editor does not re-implement the mouse handling. Right-clicking outside the
+        /// current selection first moves the selection onto the clicked row.
+        /// </summary>
+        public static void AttachRowValueMenu(DataGridView grid, Func<string> selectedValue, Action onRemove = null)
+        {
+            if (grid == null) return;
+
+            grid.CellMouseUp += (sender, e) =>
+            {
+                if (e.Button != MouseButtons.Right || e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+                grid.Rows[e.RowIndex].Selected = true;
+                ShowAtCell(grid, e, () => OpenJsonViewer(selectedValue), onRemove);
+            };
+        }
+
+        /// <summary>
+        /// Cell-selection variant used by the query window, whose grid tracks the exact cell the user
+        /// clicked rather than whole rows.
+        /// </summary>
+        public static void AttachCellValueMenu(DataGridView grid, Func<string> selectedValue, Action onRemove = null)
+        {
+            if (grid == null) return;
+
+            grid.CellMouseUp += (sender, e) =>
+            {
+                if (e.Button != MouseButtons.Right || e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+                if (grid.SelectedCells.Count != 1)
+                {
+                    grid.ClearSelection();
+                    grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Selected = true;
+                }
+
+                ShowAtCell(grid, e, () => OpenJsonViewer(selectedValue), onRemove);
+            };
+        }
+
+        private static void ShowAtCell(DataGridView grid, DataGridViewCellMouseEventArgs e, Action onOpenViewer, Action onRemove)
+        {
+            Rectangle cellRect = grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
+            Point location = new Point(cellRect.Left + e.Location.X, cellRect.Top + e.Location.Y);
+            ShowValueContextMenu(grid, location, onOpenViewer, onRemove);
+        }
+
+        private static void OpenJsonViewer(Func<string> selectedValue)
+        {
+            if (selectedValue == null) return;
+
+            FormJsonViewer viewer = new FormJsonViewer();
+            viewer.Show();
+            viewer.JsonText = selectedValue() ?? "";
         }
 
         /// <summary>

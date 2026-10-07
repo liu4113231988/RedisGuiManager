@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -61,7 +62,7 @@ namespace RedisGuiManager
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to load slowlog\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(UiText.LoadSlowlogFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -81,17 +82,17 @@ namespace RedisGuiManager
         private void button_clear_Click(object sender, EventArgs e)
         {
             if (!redisClient.CanWrite()) return;
-            if (MessageBox.Show("Clear all slowlog entries?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+            if (MessageBox.Show(UiText.ClearSlowlogPrompt, UiText.ConfirmTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
                 try
                 {
                     redisClient.RedisServer.SlowlogReset();
                     LoadSlowlog();
-                    MessageBox.Show("Slowlog cleared.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(UiText.SlowlogCleared, UiText.SuccessTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Failed to clear slowlog\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(UiText.ClearSlowlogFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }

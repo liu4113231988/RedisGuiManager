@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 
@@ -166,7 +167,7 @@ namespace RedisGuiManager
         {
             if (database == null)
             {
-                MessageBox.Show(this, "Redis connection error", name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, UiText.RedisConnectionError, name, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -275,13 +276,13 @@ namespace RedisGuiManager
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
             if (database == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
@@ -299,10 +300,10 @@ namespace RedisGuiManager
             if (redisClient == null || !redisClient.CanWrite()) return;
             try
             {
-                if (valueControl.OriginalValue.IsNull) { MessageBox.Show("Key is missing; refresh or create it explicitly"); return; }
+                if (valueControl.OriginalValue.IsNull) { MessageBox.Show(UiText.KeyIsMissing); return; }
                 if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex)
                 {
-                    MessageBox.Show("Binary/Hex values are read-only. Switch to text for text values.");
+                    MessageBox.Show(UiText.BinaryHexReadOnlyHint);
                     return;
                 }
                 string save_text = valueControl.EditedValue();
@@ -326,7 +327,7 @@ namespace RedisGuiManager
             }
             catch (StackExchange.Redis.RedisException ex)
             {
-                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+                MessageBox.Show(ex.Message, UiText.OperationFailedRefresh);
             }
         }
     }

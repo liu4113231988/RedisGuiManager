@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 
@@ -54,6 +55,8 @@ namespace RedisGuiManager
             pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_hash);
             GridUi.LimitCellText(dataGridView_hash);
+            GridUi.AttachRowValueMenu(dataGridView_hash,
+                () => dataGridView_hash.SelectedRows.Count > 0 ? dataGridView_hash.SelectedRows[0].Cells[1].Value?.ToString() ?? "" : "");
 
             if (Config.darkmode > 0)
             {
@@ -84,7 +87,7 @@ namespace RedisGuiManager
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
@@ -118,8 +121,8 @@ namespace RedisGuiManager
                 size += (int)read[i].Value.Length();
             }
 
-            label_size.Text = "Size : " + Utils.GetSizeDescription(size);
-            label_length_val.Text = $"{read.Length} on this page";
+            label_size.Text = UiText.SizePrefix + Utils.GetSizeDescription(size);
+            label_length_val.Text = string.Format(UiText.RowsOnThisPage, read.Length);
 
             Utils.ControlDataGridViewRow(dataGridView_hash, read.Length);
             for (int i = 0; i < read.Length; i++)
@@ -191,7 +194,7 @@ namespace RedisGuiManager
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_hash.SelectedRows.Count > 0)
             {
-                if (MessageBox.Show(string.Format("Delete Key:{0} Hash key:{1}", stringKeyName, selectField), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                if (MessageBox.Show(string.Format(UiText.DeleteHashFieldPrompt, stringKeyName, selectField), UiText.Delete, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                 {
                     bool removed = await database.HashDeleteAsync(stringKeyName, selectField);
                     if (removed)
@@ -200,13 +203,13 @@ namespace RedisGuiManager
                     }
                     else
                     {
-                        MessageBox.Show("Delete row fail");
+                        MessageBox.Show(UiText.DeleteRowFailed);
                     }
                 }
             }
             else
             {
-                MessageBox.Show("Please select row");
+                MessageBox.Show(UiText.SelectRowFirst);
             }
         }
 
@@ -239,36 +242,6 @@ namespace RedisGuiManager
             }
         }
 
-        private void dataGridView_hash_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            if (e.ColumnIndex == -1 || e.RowIndex == -1)
-                return;
-
-            if (e.Button == MouseButtons.Right)
-            {
-                dataGridView_hash.Rows[e.RowIndex].Selected = true;
-
-                Rectangle cellRect = dataGridView_hash.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                Point ptLoc = new Point(cellRect.Left + e.Location.X, cellRect.Top + e.Location.Y);
-
-                show_context_menu(dataGridView_hash, ptLoc);
-            }
-        }
-
-        private void show_context_menu(Control c, Point p)
-        {
-            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
-        }
-
-        private void CM_json_viewer()
-        {
-            if (dataGridView_hash.SelectedRows.Count <= 0) return;
-
-            FormJsonViewer fjv = new FormJsonViewer();
-            fjv.Show();
-            fjv.JsonText = dataGridView_hash.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
-        }
-
         private void textBox_search_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode != Keys.Enter)
@@ -293,14 +266,14 @@ namespace RedisGuiManager
 
         private async void button_save_Click(object sender, EventArgs e)
         {
-            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show("Binary/Hex values are read-only"); return; }
+            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show(UiText.ReadOnlyBinaryValue); return; }
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_hash.SelectedRows.Count <= 0)
             {
                 return;
             }
 
-            if (valueControl.OriginalValue.IsNull) { MessageBox.Show("Field is missing; refresh first"); return; }
+            if (valueControl.OriginalValue.IsNull) { MessageBox.Show(UiText.HashFieldMissing); return; }
             string save_text = valueControl.EditedValue();
             if (ValueControl.GetDisplayType() == ValueControl.DisplayType.Json)
             {

@@ -168,7 +168,7 @@ namespace RedisGuiManager
             this.dataGridView_stream.Size = new System.Drawing.Size(729, 230);
             this.dataGridView_stream.TabIndex = 0;
             
-            this.dataGridView_stream.CellMouseUp += new System.Windows.Forms.DataGridViewCellMouseEventHandler(this.dataGridView_stream_CellMouseUp);
+            
             // 
             // Column_id
             // 

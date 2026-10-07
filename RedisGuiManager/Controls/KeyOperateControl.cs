@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -69,18 +70,18 @@ namespace RedisGuiManager
                 {
                     using (FormInputString formInput = new FormInputString())
                     {
-                        formInput.TextInfo = "New ttl(seconds), -1 means permanent";
+                        formInput.TextInfo = UiText.SetTtlPrompt;
                         if (formInput.ShowDialog() == DialogResult.OK)
                         {
                             if (formInput.InputValue == "-1")
                             {
                                 if (database.KeyPersist(keyName))
                                 {
-                                    MessageBox.Show("Set ttl success");
+                                    MessageBox.Show(UiText.SetTtlSuccess);
                                 }
                                 else
                                 {
-                                    MessageBox.Show("Set ttl failed");
+                                    MessageBox.Show(UiText.SetTtlFailed);
                                 }
                             }
                             else
@@ -89,16 +90,16 @@ namespace RedisGuiManager
                                 {
                                     if (database.KeyExpire(keyName, new TimeSpan(0, 0, seconds)))
                                     {
-                                        MessageBox.Show("Set ttl success");
+                                        MessageBox.Show(UiText.SetTtlSuccess);
                                     }
                                     else
                                     {
-                                        MessageBox.Show("Set ttl failed");
+                                        MessageBox.Show(UiText.SetTtlFailed);
                                     }
                                 }
                                 else
                                 {
-                                    MessageBox.Show("Please enter the number. not text");
+                                    MessageBox.Show(UiText.EnterNumberNotText);
                                 }
                             }
                         }
@@ -107,7 +108,7 @@ namespace RedisGuiManager
             }
             catch (StackExchange.Redis.RedisException ex)
             {
-                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+                MessageBox.Show(ex.Message, UiText.OperationFailedRefresh);
             }
         }
 
@@ -121,7 +122,7 @@ namespace RedisGuiManager
                 {
                     using (FormInputString formInput = new FormInputString())
                     {
-                        formInput.TextInfo = string.Format("Rename key [{0}]", keyName);
+                        formInput.TextInfo = string.Format(UiText.RenamePrompt, keyName);
                         if (formInput.ShowDialog() == DialogResult.OK)
                         {
                             if (!string.IsNullOrEmpty(formInput.InputValue) && database.KeyRename(keyName, formInput.InputValue, StackExchange.Redis.When.NotExists))
@@ -130,7 +131,7 @@ namespace RedisGuiManager
                             }
                             else
                             {
-                                MessageBox.Show("Rename failed");
+                                MessageBox.Show(UiText.RenameFailed);
                             }
                         }
                     }
@@ -138,7 +139,7 @@ namespace RedisGuiManager
             }
             catch (StackExchange.Redis.RedisException ex)
             {
-                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+                MessageBox.Show(ex.Message, UiText.OperationFailedRefresh);
             }
         }
 

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -36,7 +37,7 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_string_key.Text))
             {
-                MessageBox.Show("Key is empty");
+                MessageBox.Show(UiText.KeyIsEmpty);
             }
             else
             {
@@ -46,7 +47,7 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add string failed");
+                    MessageBox.Show(UiText.AddStringFailed);
                 }
             }
         }
@@ -55,7 +56,7 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_hash_key.Text) || string.IsNullOrEmpty(textBox_hash_hash_key.Text))
             {
-                MessageBox.Show("Key is empty");
+                MessageBox.Show(UiText.KeyIsEmpty);
             }
             else
             {
@@ -65,7 +66,7 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add hash failed");
+                    MessageBox.Show(UiText.AddHashFailed);
                 }
             }
         }
@@ -74,7 +75,7 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_list_value.Text) || string.IsNullOrEmpty(textBox_list_key.Text))
             {
-                MessageBox.Show("Key is empty");
+                MessageBox.Show(UiText.KeyIsEmpty);
             }
             else
             {
@@ -94,7 +95,7 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add list failed");
+                    MessageBox.Show(UiText.AddListFailed);
                 }
             }
         }
@@ -103,7 +104,7 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_set_key.Text))
             {
-                MessageBox.Show("Key is empty");
+                MessageBox.Show(UiText.KeyIsEmpty);
             }
             else
             {
@@ -113,7 +114,7 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add set failed");
+                    MessageBox.Show(UiText.AddSetFailed);
                 }
             }
         }
@@ -122,13 +123,13 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_zset_key.Text))
             {
-                MessageBox.Show("Key is empty");
+                MessageBox.Show(UiText.KeyIsEmpty);
             }
             else
             {
                 if (double.TryParse(textBox_zset_score.Text, out double score) == false)
                 {
-                    MessageBox.Show("Score must be the number");
+                    MessageBox.Show(UiText.ScoreMustBeNumber);
                     return;
                 }
 
@@ -138,7 +139,7 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add zset failed");
+                    MessageBox.Show(UiText.AddZSetFailed);
                 }
             }
         }
@@ -147,13 +148,13 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_stream_key.Text))
             {
-                MessageBox.Show("Key is empty");
+                MessageBox.Show(UiText.KeyIsEmpty);
                 return;
             }
 
             if (string.IsNullOrEmpty(textBox_stream_field.Text))
             {
-                MessageBox.Show("Field is empty");
+                MessageBox.Show(UiText.FieldIsEmpty);
                 return;
             }
 
@@ -174,12 +175,12 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add stream entry failed");
+                    MessageBox.Show(UiText.AddStreamEntryFailed);
                 }
             }
             catch (RedisServerException ex)
             {
-                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

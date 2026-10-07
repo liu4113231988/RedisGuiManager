@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using System.IO;
 using System.Net;
 using Newtonsoft.Json;
@@ -116,7 +117,7 @@ namespace RedisGuiManager
         {
             if (string.IsNullOrEmpty(textBox_name.Text))
             {
-                MessageBox.Show("Server name can not be empty!");
+                MessageBox.Show(UiText.ServerNameRequired);
 
                 return false;
             }
@@ -128,27 +129,27 @@ namespace RedisGuiManager
                     IPAddress[] addresses = Dns.GetHostAddresses(textBox_ip.Text);
                     if (addresses.Length == 0)
                     {
-                        MessageBox.Show("Invalid IP address or URL");
+                        MessageBox.Show(UiText.InvalidHostOrUrl);
                         return false;
                     }
                 }
                 catch
                 {
-                    MessageBox.Show("Invalid IP address or URL");
+                    MessageBox.Show(UiText.InvalidHostOrUrl);
                     return false;
                 }
             }
 
             if (int.TryParse(textBox_port.Text, out int port) == false || port < 1 || port > 65535)
             {
-                MessageBox.Show("Invalid port");
+                MessageBox.Show(UiText.InvalidPort);
 
                 return false;
             }
 
             if (int.TryParse(textBox_tunnel_port.Text, out int tunnel_port) == false || tunnel_port < 1 || tunnel_port > 65535)
             {
-                MessageBox.Show("Invalid tunnel port");
+                MessageBox.Show(UiText.InvalidTunnelPort);
 
                 return false;
             }
@@ -162,7 +163,7 @@ namespace RedisGuiManager
             {
                 if (string.IsNullOrWhiteSpace(textBox_tunnel_key.Text))
                 {
-                    MessageBox.Show("SSH private key path can not be empty when a key is used.");
+                    MessageBox.Show(UiText.SshKeyPathRequired);
                     return false;
                 }
 
@@ -186,7 +187,7 @@ namespace RedisGuiManager
             string raw = textBox_cluster_endpoints.Text;
             if (string.IsNullOrWhiteSpace(raw))
             {
-                MessageBox.Show("Cluster mode needs at least one seed endpoint, for example 127.0.0.1:7000.");
+                MessageBox.Show(UiText.ClusterSeedRequired);
                 return false;
             }
 
@@ -218,7 +219,7 @@ namespace RedisGuiManager
 
             if (accepted == 0)
             {
-                MessageBox.Show("No usable cluster endpoint was found. Use host:port, one per line, for example 127.0.0.1:7000.");
+                MessageBox.Show(UiText.NoUsableClusterEndpoint);
                 return false;
             }
 
@@ -227,7 +228,7 @@ namespace RedisGuiManager
                 DialogResult answer = MessageBox.Show(
                     "These cluster endpoints will be ignored:\r\n\r\n" + string.Join("\r\n", problems) +
                     "\r\n\r\nSave the connection anyway?",
-                    "Invalid cluster endpoints", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    UiText.InvalidClusterEndpoints, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
                 return answer == DialogResult.Yes;
             }
@@ -284,11 +285,11 @@ namespace RedisGuiManager
             OperateResult connect = redis.Connect();
             if (connect.IsSuccess)
             {
-                MessageBox.Show("Connect Success!");
+                MessageBox.Show(UiText.ConnectSuccess);
             }
             else
             {
-                MessageBox.Show("Connect Failed\r\n" + connect.Message);
+                MessageBox.Show(UiText.ConnectFailedPrefix + connect.Message);
             }
 
             redis.Close();

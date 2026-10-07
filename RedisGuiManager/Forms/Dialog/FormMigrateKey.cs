@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -60,26 +61,26 @@ namespace RedisGuiManager
         {
             if (textBox_host.Text == "")
 			{
-                MessageBox.Show("host is empty");
+                MessageBox.Show(UiText.HostIsEmpty);
                 return;
 			}
 
             if (int.TryParse(textBox_port.Text, out int port) == false)
 			{
-                MessageBox.Show("insert port as number");
+                MessageBox.Show(UiText.PortMustBeNumber);
                 return;
 			}
 
             if (int.TryParse(textBox_db_num.Text, out int db_num) == false)
 			{
-                MessageBox.Show("insert db number as number");
+                MessageBox.Show(UiText.DbMustBeNumber);
                 return;
 			}
 
             if (usePattern == true &&
                 textBox_key_pattern.Text == "")
 			{
-                MessageBox.Show("insert key pattern");
+                MessageBox.Show(UiText.KeyPatternRequired);
                 return;
 			}
 

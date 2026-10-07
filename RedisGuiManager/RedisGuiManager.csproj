@@ -10,7 +10,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- WinForms owns DPI configuration; do not also declare it in app.manifest (WFO0003). -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+    <NeutralLanguage>en</NeutralLanguage>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
     <GenerateResourceWarnOnBinaryFormatterUse>false</GenerateResourceWarnOnBinaryFormatterUse>

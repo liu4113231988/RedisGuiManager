@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using System.Data.SQLite;
 using System.IO;
 using System.Threading;
@@ -62,6 +63,9 @@ namespace RedisGuiManager
             comboBox_keys_type.SelectedIndex = (int)RedisKeyType.Hash;
             dataGridView_query_result.DoubleBuffered(true);
             GridUi.LimitCellText(dataGridView_query_result);
+            GridUi.AttachCellValueMenu(dataGridView_query_result,
+                () => dataGridView_query_result.SelectedCells.Count > 0 ? dataGridView_query_result.SelectedCells[0].Value?.ToString() ?? "" : "",
+                CM_remove_selected_keys);
 
             sqlite_con = new SQLiteConnection($"Data Source=:memory:;Version=3;");
             sqlite_con.Open();
@@ -904,7 +908,7 @@ namespace RedisGuiManager
             is_stop_query = false;
             try { await execute_query_core(sql); }
             catch (OperationCanceledException) { toolStripStatusLabel_status.Text = "Canceled"; }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Query failed"); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, UiText.QueryFailedTitle); }
             finally
             {
                 try { using var rollback = new SQLiteCommand("ROLLBACK;", sqlite_con); rollback.ExecuteNonQuery(); } catch (SQLiteException) { }
@@ -1033,7 +1037,7 @@ namespace RedisGuiManager
             }
             catch (SQLiteException sqlite_ex)
             {
-                MessageBox.Show(sqlite_ex.Message, "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(sqlite_ex.Message, UiText.QueryErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             button_col_row_count.Text = $"({dataGridView_query_result.Rows.Count}r x {dataGridView_query_result.Columns.Count}c)";
@@ -1085,40 +1089,6 @@ namespace RedisGuiManager
             }
         }
 
-        private void dataGridView_query_result_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            if (e.ColumnIndex == -1 || e.RowIndex == -1)
-                return;
-
-            if (e.Button == MouseButtons.Right)
-            {
-                if (dataGridView_query_result.SelectedCells.Count == 1)
-                {
-                    dataGridView_query_result.ClearSelection();
-                    dataGridView_query_result.Rows[e.RowIndex].Cells[e.ColumnIndex].Selected = true;
-                }
-
-                Rectangle cellRect = dataGridView_query_result.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                Point ptLoc = new Point(cellRect.Left + e.Location.X, cellRect.Top + e.Location.Y);
-
-                show_context_menu(dataGridView_query_result, ptLoc);
-            }
-        }
-
-        private void show_context_menu(Control c, Point p)
-        {
-            GridUi.ShowValueContextMenu(c, p, CM_json_viewer, CM_remove_selected_keys);
-        }
-
-        private void CM_json_viewer()
-        {
-            if (dataGridView_query_result.SelectedCells.Count == 0) return;
-
-            FormJsonViewer fjv = new FormJsonViewer();
-            fjv.Show();
-            fjv.JsonText = dataGridView_query_result.SelectedCells[0].Value?.ToString() ?? "";
-        }
-
         private void CM_remove_selected_keys()
         {
             // Collect the targets first so the user confirms exactly what will be deleted.
@@ -1140,7 +1110,7 @@ namespace RedisGuiManager
             {
                 if (dataGridView_query_result.Columns.Contains("a_db") == false)
                 {
-                    MessageBox.Show("a_db field required");
+                    MessageBox.Show(UiText.DbFieldRequired);
                     return;
                 }
 
@@ -1193,7 +1163,7 @@ namespace RedisGuiManager
             }
             else if (removed == 0)
             {
-                MessageBox.Show("No keys were removed.", "Key removal finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(UiText.NoKeysRemoved, UiText.KeyRemovalFinished, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 
             checkBox_reuse_table.Checked = false;

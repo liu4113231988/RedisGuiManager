@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="ReadOnlyBinaryValue" xml:space="preserve">
+    <value>二进制/十六进制值不可编辑</value>
+  </data>
+  <data name="RedisConnectionError" xml:space="preserve">
+    <value>Redis 连接错误</value>
+  </data>
+  <data name="OperationFailedRefresh" xml:space="preserve">
+    <value>操作失败；重试前请刷新</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="SaveFailed" xml:space="preserve">
+    <value>保存失败</value>
+  </data>
+  <data name="DeleteRowSuccess" xml:space="preserve">
+    <value>删除行成功</value>
+  </data>
+  <data name="DeleteRowFailed" xml:space="preserve">
+    <value>删除行失败</value>
+  </data>
+  <data name="SelectRowFirst" xml:space="preserve">
+    <value>请先选择一行</value>
+  </data>
+  <data name="SizePrefix" xml:space="preserve">
+    <value>大小：</value>
+  </data>
+  <data name="RowsOnThisPage" xml:space="preserve">
+    <value>本页 {0} 条</value>
+  </data>
+  <data name="SetTtlPrompt" xml:space="preserve">
+    <value>新的 ttl（秒），-1 表示永久</value>
+  </data>
+  <data name="SetTtlSuccess" xml:space="preserve">
+    <value>设置 ttl 成功</value>
+  </data>
+  <data name="SetTtlFailed" xml:space="preserve">
+    <value>设置 ttl 失败</value>
+  </data>
+  <data name="EnterNumberNotText" xml:space="preserve">
+    <value>请输入数字，而不是文本</value>
+  </data>
+  <data name="RenamePrompt" xml:space="preserve">
+    <value>重命名键 [{0}]</value>
+  </data>
+  <data name="RenameFailed" xml:space="preserve">
+    <value>重命名失败</value>
+  </data>
+  <data name="InputScoreAsNumber" xml:space="preserve">
+    <value>请输入数字作为分值</value>
+  </data>
+  <data name="DeleteKeyIndexPrompt" xml:space="preserve">
+    <value>删除键：{0}，索引：{1}</value>
+  </data>
+  <data name="DeleteIndexSuccess" xml:space="preserve">
+    <value>删除索引 {0} 成功</value>
+  </data>
+  <data name="DeleteIndexFailed" xml:space="preserve">
+    <value>删除索引 {0} 失败</value>
+  </data>
+  <data name="DeleteHashFieldPrompt" xml:space="preserve">
+    <value>删除键：{0}，Hash 字段：{1}</value>
+  </data>
+  <data name="DeleteKeyPrompt" xml:space="preserve">
+    <value>删除键：{0}</value>
+  </data>
+  <data name="HashFieldMissing" xml:space="preserve">
+    <value>字段已丢失；请先刷新</value>
+  </data>
+  <data name="StreamDeleteFailed" xml:space="preserve">
+    <value>删除条目失败</value>
+  </data>
+  <data name="StreamGroupsButton" xml:space="preserve">
+    <value>消费组/待处理</value>
+  </data>
+  <data name="StreamTitle" xml:space="preserve">
+    <value>Stream</value>
+  </data>
+  <data name="StreamDeletePrompt" xml:space="preserve">
+    <value>从 stream [{1}] 中删除条目 [{0}]？</value>
+  </data>
+  <data name="MenuJsonViewer" xml:space="preserve">
+    <value>JSON 查看器</value>
+  </data>
+  <data name="MenuRemoveSelectedKeys" xml:space="preserve">
+    <value>删除选中的键</value>
+  </data>
+  <data name="DeleteKeyConfirm" xml:space="preserve">
+    <value>确认删除键 [{0}]？</value>
+  </data>
+  <data name="DeleteKeyTitle" xml:space="preserve">
+    <value>删除键</value>
+  </data>
+  <data name="DeleteKeyFailed" xml:space="preserve">
+    <value>删除键失败</value>
+  </data>
+  <data name="LoadConnectionsFailed" xml:space="preserve">
+    <value>加载连接失败\r\n</value>
+  </data>
+  <data name="SaveFailedFor" xml:space="preserve">
+    <value>保存 {0} 失败\r\n{1}</value>
+  </data>
+  <data name="SaveFailedDetail" xml:space="preserve">
+    <value>保存失败\r\n</value>
+  </data>
+  <data name="DuplicateConnectionName" xml:space="preserve">
+    <value>名为 &quot;{0}&quot; 的连接已存在，请换一个名称。</value>
+  </data>
+  <data name="DuplicateNameTitle" xml:space="preserve">
+    <value>名称重复</value>
+  </data>
+  <data name="InsertValue1Number" xml:space="preserve">
+    <value>第一个值只能输入数字</value>
+  </data>
+  <data name="InsertValue2Number" xml:space="preserve">
+    <value>第二个值只能输入数字</value>
+  </data>
+  <data name="InsertNumberOnly" xml:space="preserve">
+    <value>只能输入数字</value>
+  </data>
+  <data name="NoKeysMatched" xml:space="preserve">
+    <value>没有匹配的键。</value>
+  </data>
+  <data name="BatchPreviewSuffix" xml:space="preserve">
+    <value> 预览</value>
+  </data>
+  <data name="BatchPreview" xml:space="preserve">
+    <value>连接：{0} [{1}]
+数据库：{2}
+匹配模式：{3}
+匹配的键数：{4}
+{5}
+
+{6}
+
+是否继续？若取消，已完成的更改仍会保留。</value>
+  </data>
+  <data name="CopyFailed" xml:space="preserve">
+    <value>复制失败</value>
+  </data>
+  <data name="SourceKeyEmpty" xml:space="preserve">
+    <value>源键为空</value>
+  </data>
+  <data name="DestinationKeyEmpty" xml:space="preserve">
+    <value>目标键为空</value>
+  </data>
+  <data name="SourceKeyNotExist" xml:space="preserve">
+    <value>{0} 不存在</value>
+  </data>
+  <data name="DestinationKeyExists" xml:space="preserve">
+    <value>{0} 已存在</value>
+  </data>
+  <data name="InsertFirstAsNumber" xml:space="preserve">
+    <value>第一个输入项必须是数字</value>
+  </data>
+  <data name="DbNumberMustBePositive" xml:space="preserve">
+    <value>数据库编号必须大于 0</value>
+  </data>
+  <data name="DbNumberNotExist" xml:space="preserve">
+    <value>数据库编号 {0} 不存在</value>
+  </data>
+  <data name="MigrateComplete" xml:space="preserve">
+    <value>键迁移完成。
+
+键：{0}
+目标服务器：{1}
+数据库编号：{2}</value>
+  </data>
+  <data name="MigrationNeedsIpAddress" xml:space="preserve">
+    <value>迁移需要目标 IP 地址</value>
+  </data>
+  <data name="ConnectionFailed" xml:space="preserve">
+    <value>连接失败</value>
+  </data>
+  <data name="ConnectToServerFirst" xml:space="preserve">
+    <value>请先连接服务器。</value>
+  </data>
+  <data name="ServerToolsTitle" xml:space="preserve">
+    <value>服务器工具</value>
+  </data>
+  <data name="InvalidRedisSetting" xml:space="preserve">
+    <value>无效的 Redis 配置</value>
+  </data>
+  <data name="TtlOf" xml:space="preserve">
+    <value>TTL：[{0}]</value>
+  </data>
+  <data name="TtlRemovedPermanent" xml:space="preserve">
+    <value>TTL 已移除（该键现在永久有效）。</value>
+  </data>
+  <data name="FailedToRemoveTtl" xml:space="preserve">
+    <value>移除 TTL 失败。</value>
+  </data>
+  <data name="KeyDeletedTtlZero" xml:space="preserve">
+    <value>键已删除（TTL=0）。</value>
+  </data>
+  <data name="FailedToDeleteKey" xml:space="preserve">
+    <value>删除键失败。</value>
+  </data>
+  <data name="TtlSetSuccess" xml:space="preserve">
+    <value>TTL 设置成功。
+
+键：{0}
+剩余：{1}</value>
+  </data>
+  <data name="FailedToSetTtl" xml:space="preserve">
+    <value>设置 TTL 失败。</value>
+  </data>
+  <data name="EnterValidNumber" xml:space="preserve">
+    <value>请输入有效的数字。</value>
+  </data>
+  <data name="RemoveTtlTitle" xml:space="preserve">
+    <value>移除 TTL</value>
+  </data>
+  <data name="RemoveTtlPrompt" xml:space="preserve">
+    <value>确认移除键 [{0}] 的 TTL？
+该键将变为永久有效。</value>
+  </data>
+  <data name="TtlRemovedKeyPermanent" xml:space="preserve">
+    <value>TTL 已移除，该键现在永久有效。</value>
+  </data>
+  <data name="FailedToRemoveTtlDetail" xml:space="preserve">
+    <value>移除 TTL 失败。
+该键可能不存在，或本来就没有 TTL。</value>
+  </data>
+  <data name="SuccessTitle" xml:space="preserve">
+    <value>成功</value>
+  </data>
+  <data name="ErrorTitle" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="KeyIsEmpty" xml:space="preserve">
+    <value>键为空</value>
+  </data>
+  <data name="AddStringFailed" xml:space="preserve">
+    <value>添加 string 失败</value>
+  </data>
+  <data name="AddHashFailed" xml:space="preserve">
+    <value>添加 hash 失败</value>
+  </data>
+  <data name="AddListFailed" xml:space="preserve">
+    <value>添加 list 失败</value>
+  </data>
+  <data name="AddSetFailed" xml:space="preserve">
+    <value>添加 set 失败</value>
+  </data>
+  <data name="ScoreMustBeNumber" xml:space="preserve">
+    <value>分值必须是数字</value>
+  </data>
+  <data name="AddZSetFailed" xml:space="preserve">
+    <value>添加 zset 失败</value>
+  </data>
+  <data name="FieldIsEmpty" xml:space="preserve">
+    <value>字段为空</value>
+  </data>
+  <data name="AddStreamEntryFailed" xml:space="preserve">
+    <value>添加 stream 条目失败</value>
+  </data>
+  <data name="ServerNameRequired" xml:space="preserve">
+    <value>服务器名称不能为空！</value>
+  </data>
+  <data name="InvalidHostOrUrl" xml:space="preserve">
+    <value>无效的 IP 地址或 URL</value>
+  </data>
+  <data name="InvalidPort" xml:space="preserve">
+    <value>无效的端口</value>
+  </data>
+  <data name="InvalidTunnelPort" xml:space="preserve">
+    <value>无效的隧道端口</value>
+  </data>
+  <data name="SshKeyPathRequired" xml:space="preserve">
+    <value>使用密钥时，SSH 私钥路径不能为空。</value>
+  </data>
+  <data name="ClusterSeedRequired" xml:space="preserve">
+    <value>集群模式至少需要一个种子节点，例如 127.0.0.1:7000。</value>
+  </data>
+  <data name="NoUsableClusterEndpoint" xml:space="preserve">
+    <value>未找到可用的集群节点。请使用 host:port 格式，每行一个，例如 127.0.0.1:7000。</value>
+  </data>
+  <data name="InvalidClusterEndpoints" xml:space="preserve">
+    <value>无效的集群节点</value>
+  </data>
+  <data name="ConnectSuccess" xml:space="preserve">
+    <value>连接成功！</value>
+  </data>
+  <data name="ConnectFailedPrefix" xml:space="preserve">
+    <value>连接失败\r\n</value>
+  </data>
+  <data name="SubscriberUnavailable" xml:space="preserve">
+    <value>订阅通道不可用，连接可能已关闭。</value>
+  </data>
+  <data name="GetSubscriberFailed" xml:space="preserve">
+    <value>获取订阅通道失败\r\n</value>
+  </data>
+  <data name="SubscriberNotAvailable" xml:space="preserve">
+    <value>订阅通道不可用</value>
+  </data>
+  <data name="ChannelNameRequired" xml:space="preserve">
+    <value>频道名不能为空</value>
+  </data>
+  <data name="SubscribeFailed" xml:space="preserve">
+    <value>订阅失败\r\n</value>
+  </data>
+  <data name="SelectChannelToUnsubscribe" xml:space="preserve">
+    <value>请选择要退订的频道</value>
+  </data>
+  <data name="UnsubscribeFailed" xml:space="preserve">
+    <value>退订失败\r\n</value>
+  </data>
+  <data name="PublishFailed" xml:space="preserve">
+    <value>发布失败\r\n</value>
+  </data>
+  <data name="WatchAlreadyActive" xml:space="preserve">
+    <value>已在监视键空间通知。</value>
+  </data>
+  <data name="LoadSlowlogFailed" xml:space="preserve">
+    <value>加载慢日志失败\r\n</value>
+  </data>
+  <data name="ClearSlowlogPrompt" xml:space="preserve">
+    <value>确认清空所有慢日志条目？</value>
+  </data>
+  <data name="ConfirmTitle" xml:space="preserve">
+    <value>确认</value>
+  </data>
+  <data name="SlowlogCleared" xml:space="preserve">
+    <value>慢日志已清空。</value>
+  </data>
+  <data name="ClearSlowlogFailed" xml:space="preserve">
+    <value>清空慢日志失败\r\n</value>
+  </data>
+  <data name="HostIsEmpty" xml:space="preserve">
+    <value>主机为空</value>
+  </data>
+  <data name="PortMustBeNumber" xml:space="preserve">
+    <value>请输入数字作为端口</value>
+  </data>
+  <data name="DbMustBeNumber" xml:space="preserve">
+    <value>请输入数字作为数据库编号</value>
+  </data>
+  <data name="KeyPatternRequired" xml:space="preserve">
+    <value>请输入键匹配模式</value>
+  </data>
+  <data name="QueryFailedTitle" xml:space="preserve">
+    <value>查询失败</value>
+  </data>
+  <data name="QueryErrorTitle" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="DbFieldRequired" xml:space="preserve">
+    <value>必须提供 a_db 字段</value>
+  </data>
+  <data name="NoKeysRemoved" xml:space="preserve">
+    <value>未删除任何键。</value>
+  </data>
+  <data name="KeyRemovalFinished" xml:space="preserve">
+    <value>键删除完成</value>
+  </data>
+  <data name="SaveFail" xml:space="preserve">
+    <value>保存失败</value>
+  </data>
+  <data name="WriteFailedInputPreserved" xml:space="preserve">
+    <value>写入失败；已保留输入</value>
+  </data>
+  <data name="InvalidScore" xml:space="preserve">
+    <value>无效的分值</value>
+  </data>
+  <data name="KeyIsMissing" xml:space="preserve">
+    <value>键已丢失；请刷新或显式创建</value>
+  </data>
+  <data name="BinaryHexReadOnlyHint" xml:space="preserve">
+    <value>二进制/十六进制值不可编辑。若为文本值，请切换到文本显示。</value>
+  </data>
+  <data name="ReadOnlyConnection" xml:space="preserve">
+    <value>此连接为只读。如需写入，请修改其设置。</value>
+  </data>
+  <data name="ReadOnlyTitle" xml:space="preserve">
+    <value>只读连接</value>
+  </data>
+  <data name="WatchFailedPrefix" xml:space="preserve">
+    <value>监视键空间通知失败\r\n</value>
+  </data>
+  <data name="LoadServerInfoFailed" xml:space="preserve">
+    <value>加载服务器信息失败\r\n</value>
+  </data>
+</root>

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using Newtonsoft.Json;
 using RedisGuiManager;
@@ -50,8 +51,79 @@ static class RegressionChecks
         }
         finally { File.Delete(file); Directory.Delete(dir); }
         CheckFeatures();
+        CheckGridUi();
+        CheckLocalization();
         CheckRedisIfConfigured();
-        Console.WriteLine("PASS: credential protection, legacy config, draft isolation, binary editing, failed-file protection");
+        Console.WriteLine("PASS: credential protection, legacy config, draft isolation, binary editing, failed-file protection, shared grid helpers, localized text");
+    }
+    // Runtime messages resolve through Resources, so the satellite assembly must carry every key the
+    // neutral one has, and a translated value must keep the same format placeholders as its source.
+    static void CheckLocalization()
+    {
+        var manager = new System.Resources.ResourceManager("RedisGuiManager.Properties.Resources", typeof(FormMain).Assembly);
+        var neutral = manager.GetResourceSet(CultureInfo.InvariantCulture, true, false);
+        var chinese = manager.GetResourceSet(new CultureInfo("zh-Hans"), true, false);
+        Check(chinese != null, "zh-Hans satellite assembly was not produced");
+        var neutralStrings = new Dictionary<string, string>();
+        foreach (System.Collections.DictionaryEntry entry in neutral)
+        {
+            if (entry.Value is string text) neutralStrings[(string)entry.Key] = text;
+        }
+        var chineseStrings = new Dictionary<string, string>();
+        foreach (System.Collections.DictionaryEntry entry in chinese)
+        {
+            if (entry.Value is string text) chineseStrings[(string)entry.Key] = text;
+        }
+        Check(chineseStrings.Count == neutralStrings.Count, "zh-Hans has " + chineseStrings.Count + " entries but the neutral culture has " + neutralStrings.Count);
+        var placeholders = new System.Text.RegularExpressions.Regex(@"\{\d+");
+        foreach (var pair in neutralStrings)
+        {
+            Check(chineseStrings.ContainsKey(pair.Key), "zh-Hans is missing " + pair.Key);
+            string target = chineseStrings[pair.Key];
+            Check(target.Length > 0, "zh-Hans entry " + pair.Key + " is empty");
+            var expected = placeholders.Matches(pair.Value).Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).OrderBy(m => m).ToList();
+            var actual = placeholders.Matches(target).Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).OrderBy(m => m).ToList();
+            Check(expected.SequenceEqual(actual), "Placeholders differ for " + pair.Key + ": " + pair.Value + " -> " + target);
+        }
+        var previous = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = new CultureInfo("zh-Hans");
+            Check(manager.GetString("RedisConnectionError") == "Redis 连接错误", "zh-Hans text was not applied at runtime");
+            CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+            Check(manager.GetString("RedisConnectionError") == "Redis connection error", "Neutral text was not restored");
+        }
+        finally { CultureInfo.CurrentUICulture = previous; }
+    }
+    // GridUi replaced five hand-written copies of the cell truncation, right-click menu and search
+    // logic, so the incremental search and filter behaviour is asserted once here.
+    static void CheckGridUi()
+    {
+        using var grid = new DataGridView { AllowUserToAddRows = false };
+        grid.Columns.Add("field", "Field");
+        grid.Columns.Add("value", "Value");
+        grid.Rows.Add("user:1", "alpha");
+        grid.Rows.Add("user:2", "beta");
+        grid.Rows.Add("other:3", "ALPHA tail");
+
+        var state = new GridUi.SearchState();
+        Check(state.Accept("alpha"), "First search should restart from the top");
+        Check(!state.Accept("alpha"), "Repeating the same query should continue instead of restarting");
+        Check(state.Accept("beta"), "A changed query should restart from the top");
+        Check(state.Accept(""), "A cleared query should restart");
+
+        Check(state.Find(grid.Rows, "beta", 0, 2, false) == 1, "Search did not locate the matching row");
+        Check(state.Find(grid.Rows, "beta", 0, 2, true) == -1, "firstColumnOnly inspected the value column");
+        Check(state.Find(grid.Rows, "alpha", 1, 2, false) == 2, "Search ignored the start index");
+        state.SetPosition(2);
+        Check(state.Find(grid.Rows, "alpha", state.LastIndex + 1, 2, false) == -1, "Search continued past the last match");
+
+        using var search = new TextBox { Text = "alpha" };
+        GridUi.FilterRows(grid, search, firstColumnOnly: false);
+        Check(grid.Rows[0].Visible && !grid.Rows[1].Visible && grid.Rows[2].Visible, "Filter hid the wrong rows");
+        search.Text = "";
+        GridUi.FilterRows(grid, search, firstColumnOnly: false);
+        Check(grid.Rows[0].Visible && grid.Rows[1].Visible && grid.Rows[2].Visible, "Clearing the filter did not restore every row");
     }
     // A connection is persisted either inside a group or at the top level, never both. Verify the
     // group editor preserves that invariant, since breaking it writes the same connection twice.

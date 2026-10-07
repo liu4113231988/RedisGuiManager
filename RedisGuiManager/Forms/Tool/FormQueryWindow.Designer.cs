@@ -248,7 +248,7 @@ namespace RedisGuiManager
             this.dataGridView_query_result.TabIndex = 0;
             this.dataGridView_query_result.TabStop = false;
             
-            this.dataGridView_query_result.CellMouseUp += new System.Windows.Forms.DataGridViewCellMouseEventHandler(this.dataGridView_query_result_CellMouseUp);
+            
             // 
             // button_col_row_count
             // 

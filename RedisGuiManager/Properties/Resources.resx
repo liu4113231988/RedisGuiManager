@@ -274,4 +274,387 @@
   <data name="search" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Image\search.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="ReadOnlyBinaryValue" xml:space="preserve">
+    <value>Binary/Hex values are read-only</value>
+  </data>
+  <data name="RedisConnectionError" xml:space="preserve">
+    <value>Redis connection error</value>
+  </data>
+  <data name="OperationFailedRefresh" xml:space="preserve">
+    <value>Operation failed; refresh before retrying</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="SaveFailed" xml:space="preserve">
+    <value>Save failed</value>
+  </data>
+  <data name="DeleteRowSuccess" xml:space="preserve">
+    <value>Delete row success</value>
+  </data>
+  <data name="DeleteRowFailed" xml:space="preserve">
+    <value>Delete row fail</value>
+  </data>
+  <data name="SelectRowFirst" xml:space="preserve">
+    <value>Please select a row</value>
+  </data>
+  <data name="SizePrefix" xml:space="preserve">
+    <value>Size : </value>
+  </data>
+  <data name="RowsOnThisPage" xml:space="preserve">
+    <value>{0} on this page</value>
+  </data>
+  <data name="SetTtlPrompt" xml:space="preserve">
+    <value>New ttl(seconds), -1 means permanent</value>
+  </data>
+  <data name="SetTtlSuccess" xml:space="preserve">
+    <value>Set ttl success</value>
+  </data>
+  <data name="SetTtlFailed" xml:space="preserve">
+    <value>Set ttl failed</value>
+  </data>
+  <data name="EnterNumberNotText" xml:space="preserve">
+    <value>Please enter the number. not text</value>
+  </data>
+  <data name="RenamePrompt" xml:space="preserve">
+    <value>Rename key [{0}]</value>
+  </data>
+  <data name="RenameFailed" xml:space="preserve">
+    <value>Rename failed</value>
+  </data>
+  <data name="InputScoreAsNumber" xml:space="preserve">
+    <value>input score as number</value>
+  </data>
+  <data name="DeleteKeyIndexPrompt" xml:space="preserve">
+    <value>Delete Key:{0} Index:{1}</value>
+  </data>
+  <data name="DeleteIndexSuccess" xml:space="preserve">
+    <value>Delete index:{0} success</value>
+  </data>
+  <data name="DeleteIndexFailed" xml:space="preserve">
+    <value>Delete index:{0} fail</value>
+  </data>
+  <data name="DeleteHashFieldPrompt" xml:space="preserve">
+    <value>Delete Key:{0} Hash key:{1}</value>
+  </data>
+  <data name="DeleteKeyPrompt" xml:space="preserve">
+    <value>Delete Key:{0}</value>
+  </data>
+  <data name="HashFieldMissing" xml:space="preserve">
+    <value>Field is missing; refresh first</value>
+  </data>
+  <data name="StreamDeleteFailed" xml:space="preserve">
+    <value>Delete entry failed</value>
+  </data>
+  <data name="StreamGroupsButton" xml:space="preserve">
+    <value>Groups/pending</value>
+  </data>
+  <data name="StreamTitle" xml:space="preserve">
+    <value>Stream</value>
+  </data>
+  <data name="StreamDeletePrompt" xml:space="preserve">
+    <value>Delete entry [{0}] from stream [{1}]?</value>
+  </data>
+  <data name="MenuJsonViewer" xml:space="preserve">
+    <value>Json viewer</value>
+  </data>
+  <data name="MenuRemoveSelectedKeys" xml:space="preserve">
+    <value>Remove selected keys</value>
+  </data>
+  <data name="DeleteKeyConfirm" xml:space="preserve">
+    <value>Delete key [{0}]?</value>
+  </data>
+  <data name="DeleteKeyTitle" xml:space="preserve">
+    <value>Delete key</value>
+  </data>
+  <data name="DeleteKeyFailed" xml:space="preserve">
+    <value>Delete key failed</value>
+  </data>
+  <data name="LoadConnectionsFailed" xml:space="preserve">
+    <value>Load connections failed\r\n</value>
+  </data>
+  <data name="SaveFailedFor" xml:space="preserve">
+    <value>Save failed for {0}\r\n{1}</value>
+  </data>
+  <data name="SaveFailedDetail" xml:space="preserve">
+    <value>Save failed\r\n</value>
+  </data>
+  <data name="DuplicateConnectionName" xml:space="preserve">
+    <value>A connection named &quot;{0}&quot; already exists. Choose a different name.</value>
+  </data>
+  <data name="DuplicateNameTitle" xml:space="preserve">
+    <value>Duplicate name</value>
+  </data>
+  <data name="InsertValue1Number" xml:space="preserve">
+    <value>Insert value1 number only</value>
+  </data>
+  <data name="InsertValue2Number" xml:space="preserve">
+    <value>Insert value2 number only</value>
+  </data>
+  <data name="InsertNumberOnly" xml:space="preserve">
+    <value>Insert number only</value>
+  </data>
+  <data name="NoKeysMatched" xml:space="preserve">
+    <value>No keys matched.</value>
+  </data>
+  <data name="BatchPreviewSuffix" xml:space="preserve">
+    <value> preview</value>
+  </data>
+  <data name="BatchPreview" xml:space="preserve">
+    <value>Connection: {0} [{1}]
+DBs: {2}
+Pattern: {3}
+Matched keys: {4}
+{5}
+
+{6}
+
+Continue? Completed changes remain if canceled.</value>
+  </data>
+  <data name="CopyFailed" xml:space="preserve">
+    <value>Copy failed</value>
+  </data>
+  <data name="SourceKeyEmpty" xml:space="preserve">
+    <value>source key is empty</value>
+  </data>
+  <data name="DestinationKeyEmpty" xml:space="preserve">
+    <value>destination key is empty</value>
+  </data>
+  <data name="SourceKeyNotExist" xml:space="preserve">
+    <value>{0} is not exist</value>
+  </data>
+  <data name="DestinationKeyExists" xml:space="preserve">
+    <value>{0} is already exist</value>
+  </data>
+  <data name="InsertFirstAsNumber" xml:space="preserve">
+    <value>insert first input as number</value>
+  </data>
+  <data name="DbNumberMustBePositive" xml:space="preserve">
+    <value>db number is must greater than 0</value>
+  </data>
+  <data name="DbNumberNotExist" xml:space="preserve">
+    <value>db number {0} is not exist</value>
+  </data>
+  <data name="MigrateComplete" xml:space="preserve">
+    <value>Migrate key complete.
+
+key : {0}
+target server : {1}
+db num : {2}</value>
+  </data>
+  <data name="MigrationNeedsIpAddress" xml:space="preserve">
+    <value>Migration requires a target IP address</value>
+  </data>
+  <data name="ConnectionFailed" xml:space="preserve">
+    <value>Connection failed</value>
+  </data>
+  <data name="ConnectToServerFirst" xml:space="preserve">
+    <value>Connect to the server first.</value>
+  </data>
+  <data name="ServerToolsTitle" xml:space="preserve">
+    <value>Server tools</value>
+  </data>
+  <data name="InvalidRedisSetting" xml:space="preserve">
+    <value>Invalid redis setting</value>
+  </data>
+  <data name="TtlOf" xml:space="preserve">
+    <value>TTL of [{0}]</value>
+  </data>
+  <data name="TtlRemovedPermanent" xml:space="preserve">
+    <value>TTL removed (key is now permanent).</value>
+  </data>
+  <data name="FailedToRemoveTtl" xml:space="preserve">
+    <value>Failed to remove TTL.</value>
+  </data>
+  <data name="KeyDeletedTtlZero" xml:space="preserve">
+    <value>Key deleted (TTL=0).</value>
+  </data>
+  <data name="FailedToDeleteKey" xml:space="preserve">
+    <value>Failed to delete key.</value>
+  </data>
+  <data name="TtlSetSuccess" xml:space="preserve">
+    <value>TTL set successfully.
+
+Key: {0}
+Remaining: {1}</value>
+  </data>
+  <data name="FailedToSetTtl" xml:space="preserve">
+    <value>Failed to set TTL.</value>
+  </data>
+  <data name="EnterValidNumber" xml:space="preserve">
+    <value>Please enter a valid number.</value>
+  </data>
+  <data name="RemoveTtlTitle" xml:space="preserve">
+    <value>Remove TTL</value>
+  </data>
+  <data name="RemoveTtlPrompt" xml:space="preserve">
+    <value>Remove TTL from key [{0}]?
+The key will become permanent.</value>
+  </data>
+  <data name="TtlRemovedKeyPermanent" xml:space="preserve">
+    <value>TTL removed. Key is now permanent.</value>
+  </data>
+  <data name="FailedToRemoveTtlDetail" xml:space="preserve">
+    <value>Failed to remove TTL.
+The key may not exist or already has no TTL.</value>
+  </data>
+  <data name="SuccessTitle" xml:space="preserve">
+    <value>Success</value>
+  </data>
+  <data name="ErrorTitle" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="KeyIsEmpty" xml:space="preserve">
+    <value>Key is empty</value>
+  </data>
+  <data name="AddStringFailed" xml:space="preserve">
+    <value>Add string failed</value>
+  </data>
+  <data name="AddHashFailed" xml:space="preserve">
+    <value>Add hash failed</value>
+  </data>
+  <data name="AddListFailed" xml:space="preserve">
+    <value>Add list failed</value>
+  </data>
+  <data name="AddSetFailed" xml:space="preserve">
+    <value>Add set failed</value>
+  </data>
+  <data name="ScoreMustBeNumber" xml:space="preserve">
+    <value>Score must be the number</value>
+  </data>
+  <data name="AddZSetFailed" xml:space="preserve">
+    <value>Add zset failed</value>
+  </data>
+  <data name="FieldIsEmpty" xml:space="preserve">
+    <value>Field is empty</value>
+  </data>
+  <data name="AddStreamEntryFailed" xml:space="preserve">
+    <value>Add stream entry failed</value>
+  </data>
+  <data name="ServerNameRequired" xml:space="preserve">
+    <value>Server name can not be empty!</value>
+  </data>
+  <data name="InvalidHostOrUrl" xml:space="preserve">
+    <value>Invalid IP address or URL</value>
+  </data>
+  <data name="InvalidPort" xml:space="preserve">
+    <value>Invalid port</value>
+  </data>
+  <data name="InvalidTunnelPort" xml:space="preserve">
+    <value>Invalid tunnel port</value>
+  </data>
+  <data name="SshKeyPathRequired" xml:space="preserve">
+    <value>SSH private key path can not be empty when a key is used.</value>
+  </data>
+  <data name="ClusterSeedRequired" xml:space="preserve">
+    <value>Cluster mode needs at least one seed endpoint, for example 127.0.0.1:7000.</value>
+  </data>
+  <data name="NoUsableClusterEndpoint" xml:space="preserve">
+    <value>No usable cluster endpoint was found. Use host:port, one per line, for example 127.0.0.1:7000.</value>
+  </data>
+  <data name="InvalidClusterEndpoints" xml:space="preserve">
+    <value>Invalid cluster endpoints</value>
+  </data>
+  <data name="ConnectSuccess" xml:space="preserve">
+    <value>Connect Success!</value>
+  </data>
+  <data name="ConnectFailedPrefix" xml:space="preserve">
+    <value>Connect Failed\r\n</value>
+  </data>
+  <data name="SubscriberUnavailable" xml:space="preserve">
+    <value>Subscriber not available. The connection may have been closed.</value>
+  </data>
+  <data name="GetSubscriberFailed" xml:space="preserve">
+    <value>Failed to get subscriber\r\n</value>
+  </data>
+  <data name="SubscriberNotAvailable" xml:space="preserve">
+    <value>Subscriber not available</value>
+  </data>
+  <data name="ChannelNameRequired" xml:space="preserve">
+    <value>Channel name cannot be empty</value>
+  </data>
+  <data name="SubscribeFailed" xml:space="preserve">
+    <value>Subscribe failed\r\n</value>
+  </data>
+  <data name="SelectChannelToUnsubscribe" xml:space="preserve">
+    <value>Please select a channel to unsubscribe</value>
+  </data>
+  <data name="UnsubscribeFailed" xml:space="preserve">
+    <value>Unsubscribe failed\r\n</value>
+  </data>
+  <data name="PublishFailed" xml:space="preserve">
+    <value>Publish failed\r\n</value>
+  </data>
+  <data name="WatchAlreadyActive" xml:space="preserve">
+    <value>Keyspace notifications are already being watched.</value>
+  </data>
+  <data name="LoadSlowlogFailed" xml:space="preserve">
+    <value>Failed to load slowlog\r\n</value>
+  </data>
+  <data name="ClearSlowlogPrompt" xml:space="preserve">
+    <value>Clear all slowlog entries?</value>
+  </data>
+  <data name="ConfirmTitle" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="SlowlogCleared" xml:space="preserve">
+    <value>Slowlog cleared.</value>
+  </data>
+  <data name="ClearSlowlogFailed" xml:space="preserve">
+    <value>Failed to clear slowlog\r\n</value>
+  </data>
+  <data name="HostIsEmpty" xml:space="preserve">
+    <value>host is empty</value>
+  </data>
+  <data name="PortMustBeNumber" xml:space="preserve">
+    <value>insert port as number</value>
+  </data>
+  <data name="DbMustBeNumber" xml:space="preserve">
+    <value>insert db number as number</value>
+  </data>
+  <data name="KeyPatternRequired" xml:space="preserve">
+    <value>insert key pattern</value>
+  </data>
+  <data name="QueryFailedTitle" xml:space="preserve">
+    <value>Query failed</value>
+  </data>
+  <data name="QueryErrorTitle" xml:space="preserve">
+    <value>ERROR</value>
+  </data>
+  <data name="DbFieldRequired" xml:space="preserve">
+    <value>a_db field required</value>
+  </data>
+  <data name="NoKeysRemoved" xml:space="preserve">
+    <value>No keys were removed.</value>
+  </data>
+  <data name="KeyRemovalFinished" xml:space="preserve">
+    <value>Key removal finished</value>
+  </data>
+  <data name="SaveFail" xml:space="preserve">
+    <value>Save fail</value>
+  </data>
+  <data name="WriteFailedInputPreserved" xml:space="preserve">
+    <value>Write failed; input preserved</value>
+  </data>
+  <data name="InvalidScore" xml:space="preserve">
+    <value>Invalid score</value>
+  </data>
+  <data name="KeyIsMissing" xml:space="preserve">
+    <value>Key is missing; refresh or create it explicitly</value>
+  </data>
+  <data name="BinaryHexReadOnlyHint" xml:space="preserve">
+    <value>Binary/Hex values are read-only. Switch to text for text values.</value>
+  </data>
+  <data name="ReadOnlyConnection" xml:space="preserve">
+    <value>This connection is read-only. Change its settings to enable writes.</value>
+  </data>
+  <data name="ReadOnlyTitle" xml:space="preserve">
+    <value>Read-only connection</value>
+  </data>
+  <data name="WatchFailedPrefix" xml:space="preserve">
+    <value>Failed to watch keyspace notifications\r\n</value>
+  </data>
+  <data name="LoadServerInfoFailed" xml:space="preserve">
+    <value>Failed to load server info\r\n</value>
+  </data>
 </root>

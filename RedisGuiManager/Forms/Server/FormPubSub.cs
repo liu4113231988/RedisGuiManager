@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -61,13 +62,13 @@ namespace RedisGuiManager
                 subscriber = redisClient.Multiplexer?.GetSubscriber();
                 if (subscriber == null)
                 {
-                    MessageBox.Show("Subscriber not available. The connection may have been closed.",
+                    MessageBox.Show(UiText.SubscriberUnavailable,
                         "Pub/Sub", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to get subscriber\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(UiText.GetSubscriberFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -75,14 +76,14 @@ namespace RedisGuiManager
         {
             if (subscriber == null)
             {
-                MessageBox.Show("Subscriber not available");
+                MessageBox.Show(UiText.SubscriberNotAvailable);
                 return;
             }
 
             string channel = textBox_channel.Text.Trim();
             if (string.IsNullOrEmpty(channel))
             {
-                MessageBox.Show("Channel name cannot be empty");
+                MessageBox.Show(UiText.ChannelNameRequired);
                 return;
             }
 
@@ -114,7 +115,7 @@ namespace RedisGuiManager
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Subscribe failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(UiText.SubscribeFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -122,7 +123,7 @@ namespace RedisGuiManager
         {
             if (listBox_channels.SelectedIndex < 0)
             {
-                MessageBox.Show("Please select a channel to unsubscribe");
+                MessageBox.Show(UiText.SelectChannelToUnsubscribe);
                 return;
             }
 
@@ -139,7 +140,7 @@ namespace RedisGuiManager
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Unsubscribe failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(UiText.UnsubscribeFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -149,7 +150,7 @@ namespace RedisGuiManager
             if (!redisClient.CanWrite()) return;
             if (subscriber == null)
             {
-                MessageBox.Show("Subscriber not available");
+                MessageBox.Show(UiText.SubscriberNotAvailable);
                 return;
             }
 
@@ -158,7 +159,7 @@ namespace RedisGuiManager
 
             if (string.IsNullOrEmpty(channel))
             {
-                MessageBox.Show("Channel name cannot be empty");
+                MessageBox.Show(UiText.ChannelNameRequired);
                 return;
             }
 
@@ -169,7 +170,7 @@ namespace RedisGuiManager
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Publish failed\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(UiText.PublishFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -182,13 +183,13 @@ namespace RedisGuiManager
         {
             if (subscriber == null)
             {
-                MessageBox.Show("Subscriber not available");
+                MessageBox.Show(UiText.SubscriberNotAvailable);
                 return;
             }
 
             if (keyspaceSubscription != null)
             {
-                MessageBox.Show("Keyspace notifications are already being watched.");
+                MessageBox.Show(UiText.WatchAlreadyActive);
                 return;
             }
 
@@ -227,7 +228,7 @@ namespace RedisGuiManager
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to watch keyspace notifications\r\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(UiText.WatchFailedPrefix + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

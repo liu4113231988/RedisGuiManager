@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -40,7 +41,7 @@ namespace RedisGuiManager
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (string.IsNullOrEmpty(textBox_field.Text))
             {
-                MessageBox.Show("Field is empty");
+                MessageBox.Show(UiText.FieldIsEmpty);
                 return;
             }
 
@@ -61,18 +62,18 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Add stream entry failed");
+                    MessageBox.Show(UiText.AddStreamEntryFailed);
                 }
             }
             catch (RedisServerException ex)
             {
-                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             }
             catch (Exception ex) when (ex is StackExchange.Redis.RedisException || ex is ObjectDisposedException)
             {
-                MessageBox.Show(this, ex.Message, "Write failed; input preserved");
+                MessageBox.Show(this, ex.Message, UiText.WriteFailedInputPreserved);
             }
         }
     }

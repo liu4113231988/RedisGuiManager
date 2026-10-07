@@ -227,7 +227,7 @@ namespace RedisGuiManager
 			this.dataGridView_set.Size = new System.Drawing.Size(729, 230);
 			this.dataGridView_set.TabIndex = 0;
 			
-			this.dataGridView_set.CellMouseUp += new System.Windows.Forms.DataGridViewCellMouseEventHandler(this.dataGridView_set_CellMouseUp);
+			
 			// 
 			// Column_index
 			// 

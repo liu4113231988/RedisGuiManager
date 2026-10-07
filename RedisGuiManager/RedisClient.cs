@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using RedisGuiManager.Properties;
 
 namespace RedisGuiManager
 {
@@ -23,7 +24,7 @@ namespace RedisGuiManager
         public bool CanWrite()
         {
             if (!Settings.read_only) return true;
-            System.Windows.Forms.MessageBox.Show("This connection is read-only. Change its settings to enable writes.", "Read-only connection");
+            System.Windows.Forms.MessageBox.Show(UiText.ReadOnlyConnection, UiText.ReadOnlyTitle);
             return false;
         }
         public void ApplyReadOnly(System.Windows.Forms.Control root)

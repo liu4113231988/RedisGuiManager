@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 
@@ -54,11 +55,13 @@ namespace RedisGuiManager
             pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_stream);
             GridUi.LimitCellText(dataGridView_stream);
+            GridUi.AttachRowValueMenu(dataGridView_stream,
+                () => dataGridView_stream.SelectedRows.Count > 0 ? dataGridView_stream.SelectedRows[0].Cells[1].Value?.ToString() ?? "" : "");
 
             // Consumer groups, pending entries and stream internals live in their own window.
             var groupInfo = new Button
             {
-                Text = "Groups/pending",
+                Text = UiText.StreamGroupsButton,
                 Width = 120,
                 Height = 26,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
@@ -97,7 +100,7 @@ namespace RedisGuiManager
         {
             if (redisClient == null || database == null)
             {
-                MessageBox.Show(this, "Redis connection error", "Stream",
+                MessageBox.Show(this, UiText.RedisConnectionError, UiText.StreamTitle,
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
@@ -113,13 +116,13 @@ namespace RedisGuiManager
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
             if (database == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
@@ -158,8 +161,8 @@ namespace RedisGuiManager
                 }
             }
 
-            label_size.Text = "Size : " + Utils.GetSizeDescription(size);
-            label_length_val.Text = $"{entries.Length} on this page";
+            label_size.Text = UiText.SizePrefix + Utils.GetSizeDescription(size);
+            label_length_val.Text = string.Format(UiText.RowsOnThisPage, entries.Length);
 
             Utils.ControlDataGridViewRow(dataGridView_stream, entries.Length);
             for (int i = 0; i < entries.Length; i++)
@@ -219,13 +222,13 @@ namespace RedisGuiManager
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_stream.SelectedRows.Count <= 0)
             {
-                MessageBox.Show("Please select a row");
+                MessageBox.Show(UiText.SelectRowFirst);
                 return;
             }
 
             string entryId = dataGridView_stream.SelectedRows[0].Cells[0].Value.ToString();
 
-            if (MessageBox.Show($"Delete entry [{entryId}] from stream [{stringKeyName}]?", "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+            if (MessageBox.Show(string.Format(UiText.StreamDeletePrompt, entryId, stringKeyName), UiText.Delete, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
                 var deleted = await database.StreamDeleteAsync(stringKeyName, new RedisValue[] { entryId });
                 if (deleted > 0)
@@ -234,7 +237,7 @@ namespace RedisGuiManager
                 }
                 else
                 {
-                    MessageBox.Show("Delete entry failed");
+                    MessageBox.Show(UiText.StreamDeleteFailed);
                 }
             }
         }
@@ -250,36 +253,6 @@ namespace RedisGuiManager
         private async void button_refresh_Click(object sender, EventArgs e)
         {
             await RefreshKeyAsync();
-        }
-
-        private void dataGridView_stream_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            if (e.ColumnIndex == -1 || e.RowIndex == -1)
-                return;
-
-            if (e.Button == MouseButtons.Right)
-            {
-                dataGridView_stream.Rows[e.RowIndex].Selected = true;
-
-                Rectangle cellRect = dataGridView_stream.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                Point ptLoc = new Point(cellRect.Left + e.Location.X, cellRect.Top + e.Location.Y);
-
-                show_context_menu(dataGridView_stream, ptLoc);
-            }
-        }
-
-        private void show_context_menu(Control c, Point p)
-        {
-            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
-        }
-
-        private void CM_json_viewer()
-        {
-            if (dataGridView_stream.SelectedRows.Count <= 0) return;
-
-            FormJsonViewer fjv = new FormJsonViewer();
-            fjv.Show();
-            fjv.JsonText = dataGridView_stream.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
         }
 
         private void textBox_search_KeyUp(object sender, KeyEventArgs e)

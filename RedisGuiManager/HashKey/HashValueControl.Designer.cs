@@ -270,7 +270,7 @@ namespace RedisGuiManager
 			this.dataGridView_hash.Size = new System.Drawing.Size(729, 198);
 			this.dataGridView_hash.TabIndex = 0;
 			
-			this.dataGridView_hash.CellMouseUp += new System.Windows.Forms.DataGridViewCellMouseEventHandler(this.dataGridView_hash_CellMouseUp);
+			
 			this.dataGridView_hash.KeyUp += new System.Windows.Forms.KeyEventHandler(this.dataGridView_hash_KeyUp);
 			// 
 			// Column_field

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using RedisGuiManager.Properties;
 using Newtonsoft.Json;
 
 namespace RedisGuiManager
@@ -49,6 +50,8 @@ namespace RedisGuiManager
             pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_zset);
             GridUi.LimitCellText(dataGridView_zset);
+            GridUi.AttachRowValueMenu(dataGridView_zset,
+                () => dataGridView_zset.SelectedRows.Count > 0 ? dataGridView_zset.SelectedRows[0].Cells[1].Value?.ToString() ?? "" : "");
             valueControl.HasOtherChanges = () => selectRow != null && textBox_score.Text != selectRow.Cells[2].Value?.ToString();
             valueControl.DiscardOtherChanges = () => textBox_score.Text = selectRow?.Cells[2].Value?.ToString() ?? "";
 
@@ -81,7 +84,7 @@ namespace RedisGuiManager
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
             {
-                MessageBox.Show("Redis connection error");
+                MessageBox.Show(UiText.RedisConnectionError);
                 return;
             }
 
@@ -103,8 +106,8 @@ namespace RedisGuiManager
                 size += Encoding.UTF8.GetBytes(read[i].Element).Length;
             }
 
-            label_size.Text = "Size : " + Utils.GetSizeDescription(size);
-            label_length_val.Text = $"{read.Length} on this page";
+            label_size.Text = UiText.SizePrefix + Utils.GetSizeDescription(size);
+            label_length_val.Text = string.Format(UiText.RowsOnThisPage, read.Length);
 
             Utils.ControlDataGridViewRow(dataGridView_zset, read.Length);
             for (int i = 0; i < read.Length; i++)
@@ -175,17 +178,17 @@ namespace RedisGuiManager
             {
                 if (dataGridView_zset.SelectedRows[0].Cells[1].Value != null)
                 {
-                    if (MessageBox.Show(string.Format("Delete Key:{0}", stringKeyName), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                    if (MessageBox.Show(string.Format(UiText.DeleteKeyPrompt, stringKeyName), UiText.Delete, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                     {
                         bool removed = await database.SortedSetRemoveAsync(stringKeyName, (StackExchange.Redis.RedisValue)dataGridView_zset.SelectedRows[0].Cells[1].Value);
                         if (removed)
                         {
-                            MessageBox.Show("Delete row success");
+                            MessageBox.Show(UiText.DeleteRowSuccess);
                             await RefreshKeyAsync();
                         }
                         else
                         {
-                            MessageBox.Show("Delete row fail");
+                            MessageBox.Show(UiText.DeleteRowFailed);
                         }
                     }
                 }
@@ -197,39 +200,9 @@ namespace RedisGuiManager
             await RefreshKeyAsync();
         }
 
-        private void dataGridView_zset_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
-        {
-            if (e.ColumnIndex == -1 || e.RowIndex == -1)
-                return;
-
-            if (e.Button == MouseButtons.Right)
-            {
-                dataGridView_zset.Rows[e.RowIndex].Selected = true;
-
-                Rectangle cellRect = dataGridView_zset.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                Point ptLoc = new Point(cellRect.Left + e.Location.X, cellRect.Top + e.Location.Y);
-
-                show_context_menu(dataGridView_zset, ptLoc);
-            }
-        }
-
-        private void show_context_menu(Control c, Point p)
-        {
-            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
-        }
-
-        private void CM_json_viewer()
-        {
-            if (dataGridView_zset.SelectedRows.Count <= 0) return;
-
-            FormJsonViewer fjv = new FormJsonViewer();
-            fjv.Show();
-            fjv.JsonText = dataGridView_zset.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
-        }
-
-		private async void button_save_Click(object sender, EventArgs e)
+        private async void button_save_Click(object sender, EventArgs e)
 		{
-            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show("Binary/Hex values are read-only"); return; }
+            if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show(UiText.ReadOnlyBinaryValue); return; }
             if (redisClient == null || !redisClient.CanWrite()) return;
             try
             {
@@ -253,7 +226,7 @@ namespace RedisGuiManager
                 double score = 0;
                 if (double.TryParse(textBox_score.Text, out score) == false || double.IsNaN(score) || double.IsInfinity(score))
                 {
-                    MessageBox.Show("input score as number");
+                    MessageBox.Show(UiText.InputScoreAsNumber);
                     return;
                 }
 
@@ -270,7 +243,7 @@ namespace RedisGuiManager
             }
             catch (StackExchange.Redis.RedisException ex)
             {
-                MessageBox.Show(ex.Message, "Operation failed; refresh before retrying");
+                MessageBox.Show(ex.Message, UiText.OperationFailedRefresh);
             }
         }
 
