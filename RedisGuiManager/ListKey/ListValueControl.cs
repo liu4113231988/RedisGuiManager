@@ -19,8 +19,7 @@ namespace RedisGuiManager
         private StackExchange.Redis.IDatabase database;
         private readonly PageNavigator pages = new PageNavigator();
 
-        private int lastSearchIndex = -1;
-        private string searchCondition = string.Empty;
+        private readonly GridUi.SearchState searchState = new GridUi.SearchState();
 
         [Browsable(false)]
         public FormMain MainForm
@@ -47,8 +46,9 @@ namespace RedisGuiManager
                 if ((control.Anchor & AnchorStyles.Bottom) != 0) { if (control.Height > 72) control.Height -= 36; else control.Top -= 36; }
             Controls.Add(pages);
             pages.CanNavigate = valueControl.ConfirmDiscard;
-            pages.PageChanged += RefreshKey;
+            pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_list);
+            GridUi.LimitCellText(dataGridView_list);
 
             if (Config.darkmode > 0)
             {
@@ -69,12 +69,12 @@ namespace RedisGuiManager
             dataGridView_list.Columns[1].Width = dataGridView_list.Width - 104;
         }
 
-        private void LoadValue_Click(object sender, EventArgs e)
+        private async void LoadValue_Click(object sender, EventArgs e)
         {
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 
-        private void RefreshKey()
+        private async Task RefreshKeyAsync()
         {
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
@@ -83,7 +83,15 @@ namespace RedisGuiManager
                 return;
             }
 
-            if (!OperationDialog.TryRun(this, "Load page", (token, progress) => { var rows = database.ListRange(stringKeyName, pages.Offset, pages.Offset + PageNavigator.PageSize); token.ThrowIfCancellationRequested(); return rows; }, out var batch)) return;
+            // LRANGE seeks by index, so paging is already O(log N); only the round trip needs to
+            // move off the UI thread.
+            int offset = pages.Offset;
+            var db = database;
+            var key = stringKeyName;
+            var batch = await db.ListRangeAsync(key, offset, offset + PageNavigator.PageSize);
+
+            if (key != stringKeyName) return;
+
             pages.UpdatePage(batch.Length > PageNavigator.PageSize);
             var read = batch.Take(PageNavigator.PageSize).ToArray();
 
@@ -126,7 +134,7 @@ namespace RedisGuiManager
             }
         }
 
-        public void SetNewKey(RedisClient redisClient, string key)
+        public async Task SetNewKey(RedisClient redisClient, string key)
         {
             if (key != stringKeyName || redisClient != this.redisClient) pages.Reset();
             this.redisClient = redisClient;
@@ -136,14 +144,14 @@ namespace RedisGuiManager
             dataGridView_list.SelectionChanged -= dataGridView_list_SelectionChanged;
 
             keyOperateControl.SetRedisClient(redisClient, key);
-            RefreshKey();
+            await RefreshKeyAsync();
             valueControl.SetValue(string.Empty);
             dataGridView_list.ClearSelection();
 
             dataGridView_list.SelectionChanged += dataGridView_list_SelectionChanged;
         }
 
-        private void button_delete_row_Click(object sender, EventArgs e)
+        private async void button_delete_row_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             try
@@ -154,13 +162,13 @@ namespace RedisGuiManager
                     if (MessageBox.Show(string.Format("Delete Key:{0} Index:{1}", stringKeyName, selectIndex), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                     {
                         string randomValue = "Remove:" + Guid.NewGuid().ToString();
-                        if ((long)database.ScriptEvaluate(
+                        if ((long)await database.ScriptEvaluateAsync(
                             "if redis.call('LINDEX',KEYS[1],ARGV[1]) ~= ARGV[2] then return redis.error_reply('List changed; refresh first') end; redis.call('LSET',KEYS[1],ARGV[1],ARGV[3]); return redis.call('LREM',KEYS[1],1,ARGV[3])",
                             new StackExchange.Redis.RedisKey[] { stringKeyName },
                             new StackExchange.Redis.RedisValue[] { selectIndex, (StackExchange.Redis.RedisValue)selectRow.Cells[1].Value, randomValue }) > 0)
                         {
                             MessageBox.Show(string.Format("Delete index:{0} success", selectIndex));
-                            RefreshKey();
+                            await RefreshKeyAsync();
                         }
                         else
                         {
@@ -176,35 +184,24 @@ namespace RedisGuiManager
             }
         }
 
-        private void button_insert_row_Click(object sender, EventArgs e)
+        private async void button_insert_row_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             using (ListValueInsertForm form = new ListValueInsertForm(redisClient, stringKeyName, database: database))
             {
                 form.ShowDialog();
-                RefreshKey();
+                await RefreshKeyAsync();
             }
         }
 
-        private void button_refresh_Click(object sender, EventArgs e)
+        private async void button_refresh_Click(object sender, EventArgs e)
         {
             if (this.selectRow != null)
             {
                 int selectIndex = int.Parse(selectRow.Cells[0].Value.ToString());
-                var read = database.ListGetByIndex(stringKeyName, selectIndex);
+                var read = await database.ListGetByIndexAsync(stringKeyName, selectIndex);
                 selectRow.Cells[1].Value = read.ToString();
                 valueControl.SetValue(read.ToString());
-            }
-        }
-
-        private void dataGridView_list_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            if (e.Value != null)
-            {
-                if (e.Value.ToString().Length > 10000)
-                {
-                    e.Value = e.Value.ToString().Substring(0, 10000);
-                }
             }
         }
 
@@ -226,20 +223,19 @@ namespace RedisGuiManager
 
         private void show_context_menu(Control c, Point p)
         {
-            ContextMenuStrip contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("Json viewer", null, new EventHandler(this.CM_json_viewer));
-
-            contextMenu.Show(c, p);
+            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
         }
 
-        private void CM_json_viewer(object o, EventArgs e)
+        private void CM_json_viewer()
         {
+            if (dataGridView_list.SelectedRows.Count <= 0) return;
+
             FormJsonViewer fjv = new FormJsonViewer();
             fjv.Show();
-            fjv.JsonText = dataGridView_list.SelectedRows[0].Cells[1].Value.ToString();
+            fjv.JsonText = dataGridView_list.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
         }
 
-        private void button_save_Click(object sender, EventArgs e)
+        private async void button_save_Click(object sender, EventArgs e)
         {
             if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show("Binary/Hex values are read-only"); return; }
             if (redisClient == null || !redisClient.CanWrite()) return;
@@ -263,113 +259,14 @@ namespace RedisGuiManager
             int index = int.Parse(selectRow.Cells[0].Value.ToString());
             try
             {
-                database.ScriptEvaluate(
+                await database.ScriptEvaluateAsync(
                     "if redis.call('LINDEX',KEYS[1],ARGV[1]) ~= ARGV[2] then return redis.error_reply('List changed; refresh before saving') end; redis.call('LSET',KEYS[1],ARGV[1],ARGV[3]); return 1",
                     new StackExchange.Redis.RedisKey[] { stringKeyName },
                     new StackExchange.Redis.RedisValue[] { index, valueControl.OriginalValue, save_text });
             }
             catch (StackExchange.Redis.RedisException ex) { MessageBox.Show(ex.Message, "Save failed"); return; }
             valueControl.AcceptChanges();
-            RefreshKey();
-        }
-
-        private void search_field_loop()
-        {
-            string search_text = textBox_search.Text;
-
-            if (string.IsNullOrEmpty(search_text))
-            {
-                return;
-            }
-
-            if (string.IsNullOrEmpty(searchCondition))
-            {
-                searchCondition = search_text;
-            }
-            else
-            {
-                if (searchCondition != search_text)
-                {
-                    lastSearchIndex = -1;
-                    searchCondition = search_text;
-                }
-            }
-
-            foreach (DataGridViewRow row in dataGridView_list.Rows)
-            {
-                row.Visible = true;
-            }
-
-            for (int i = lastSearchIndex + 1; i < dataGridView_list.Rows.Count; ++i)
-            {
-                foreach (DataGridViewCell cell in dataGridView_list.Rows[i].Cells)
-                {
-                    if (cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                    {
-                        dataGridView_list.Rows[i].Selected = true;
-                        dataGridView_list.CurrentCell = dataGridView_list.Rows[i].Cells[0];
-                        lastSearchIndex = i;
-
-                        return;
-                    }
-                }
-            }
-
-            // 못 찾으면 처음 부터 한번더 돌아 봄
-            for (int i = 0; i < dataGridView_list.Rows.Count; ++i)
-            {
-                foreach (DataGridViewCell cell in dataGridView_list.Rows[i].Cells)
-                {
-                    if (cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                    {
-                        dataGridView_list.Rows[i].Selected = true;
-                        dataGridView_list.CurrentCell = dataGridView_list.Rows[i].Cells[0];
-
-                        if (lastSearchIndex == i)
-                        {
-                            dataGridView_list.CurrentCell = dataGridView_list.Rows[i].Cells[1];
-                            dataGridView_list.CurrentCell = dataGridView_list.Rows[i].Cells[0];
-                        }
-
-                        lastSearchIndex = i;
-
-                        return;
-                    }
-                }
-            }
-        }
-
-        private void search_field_grep()
-        {
-            string search_text = textBox_search.Text;
-
-            if (string.IsNullOrEmpty(search_text))
-            {
-                foreach (DataGridViewRow row in dataGridView_list.Rows)
-                {
-                    row.Visible = true;
-                }
-            }
-            else
-            {
-                foreach (DataGridViewRow row in dataGridView_list.Rows)
-                {
-                    foreach (DataGridViewCell cell in row.Cells)
-                    {
-                        if (cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                        {
-                            row.Visible = true;
-                            break;
-                        }
-                        else
-                        {
-                            row.Visible = false;
-                        }
-                    }
-                }
-
-                dataGridView_list.ClearSelection();
-            }
+            await RefreshKeyAsync();
         }
 
         private void textBox_search_KeyUp(object sender, KeyEventArgs e)
@@ -386,11 +283,11 @@ namespace RedisGuiManager
 
             if (checkBox_search_grep.Checked)
             {
-                search_field_grep();
+                GridUi.FilterRows(dataGridView_list, textBox_search, firstColumnOnly: false);
             }
             else
             {
-                search_field_loop();
+                GridUi.FindNextMatch(dataGridView_list, textBox_search, searchState, firstColumnOnly: false);
             }
         }
     }

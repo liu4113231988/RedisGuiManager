@@ -50,22 +50,22 @@ namespace RedisGuiManager
             keyOperateControl.LoadValue.Click += LoadValue_Click;
         }
 
-        public void SetNewKey(RedisClient client, string key)
+        public async Task SetNewKey(RedisClient client, string key)
         {
             redisClient = client;
             database = client.Redis;
             stringKeyName = key;
 
             keyOperateControl.SetRedisClient(redisClient, key);
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 
-        private void LoadValue_Click(object sender, EventArgs e)
+        private async void LoadValue_Click(object sender, EventArgs e)
         {
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 
-        private void RefreshKey()
+        private async Task RefreshKeyAsync()
         {
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
@@ -80,11 +80,16 @@ namespace RedisGuiManager
                 return;
             }
 
-            var read = database.StringGet(stringKeyName);
+            var key = stringKeyName;
+            var read = await database.StringGetAsync(key);
+
+            // The user may have switched keys while the request was in flight.
+            if (key != stringKeyName) return;
+
             valueControl.SetValue(read);
         }
 
-        private void button_save_Click(object sender, EventArgs e)
+        private async void button_save_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             try
@@ -107,12 +112,12 @@ namespace RedisGuiManager
                     }
                 }
 
-                database.ScriptEvaluate(
+                await database.ScriptEvaluateAsync(
                     "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return redis.error_reply('Value changed; refresh before saving') end; local ttl=redis.call('PTTL',KEYS[1]); redis.call('SET',KEYS[1],ARGV[2]); if ttl >= 0 then redis.call('PEXPIRE',KEYS[1],ttl) end; return 1",
                     new StackExchange.Redis.RedisKey[] { stringKeyName },
                     new StackExchange.Redis.RedisValue[] { valueControl.OriginalValue, save_text });
                 valueControl.AcceptChanges();
-                RefreshKey();
+                await RefreshKeyAsync();
             }
             catch (StackExchange.Redis.RedisException ex)
             {

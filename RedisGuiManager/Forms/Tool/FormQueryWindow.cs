@@ -51,7 +51,7 @@ namespace RedisGuiManager
             foreach (Control control in Controls) if (control.Dock == DockStyle.None) { control.Top += 34; if ((control.Anchor & AnchorStyles.Bottom) != 0 && control.Height > 100) control.Height -= 70; }
             Controls.Add(limits);
             Controls.Add(resultPages);
-            resultPages.PageChanged += RenderResultPage;
+            resultPages.PageChanged += () => { RenderResultPage(); return Task.CompletedTask; };
             setting_richtextbox();
 
             if (Config.darkmode > 0)
@@ -61,11 +61,23 @@ namespace RedisGuiManager
 
             comboBox_keys_type.SelectedIndex = (int)RedisKeyType.Hash;
             dataGridView_query_result.DoubleBuffered(true);
+            GridUi.LimitCellText(dataGridView_query_result);
 
             sqlite_con = new SQLiteConnection($"Data Source=:memory:;Version=3;");
             sqlite_con.Open();
             sqlite_con.EnableExtensions(true);
-            sqlite_con.LoadExtension("SQLite.Interop.dll", "sqlite3_json_init");
+
+            // The JSON1 extension lives in SQLite.Interop.dll; load it from the app directory
+            // first and fail with an actionable message instead of a raw DllNotFoundException.
+            if (TryLoadJsonExtension() == false)
+            {
+                MessageBox.Show(
+                    "The SQLite JSON1 extension could not be loaded.\r\n\r\n" +
+                    $"Expected: {Path.Combine(AppContext.BaseDirectory, "SQLite.Interop.dll")}\r\n" +
+                    $"Process architecture: {(IntPtr.Size == 8 ? "x64" : "x86")}\r\n\r\n" +
+                    "JSON functions (json_extract, json_each, ...) are unavailable in this session.",
+                    "Query window", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
 
             table_name = "t_" + Guid.NewGuid().ToString().Replace("-", "");
             textBox_table.Text = table_name;
@@ -100,10 +112,65 @@ namespace RedisGuiManager
             autocompleteMenu.ImageList = imageList;
         }
 
+        private bool TryLoadJsonExtension()
+        {
+            // Preferred: resolve next to the executable, then fall back to the default probe path.
+            string dllPath = Path.Combine(AppContext.BaseDirectory, "SQLite.Interop.dll");
+            foreach (string candidate in new[] { dllPath, "SQLite.Interop.dll" })
+            {
+                try
+                {
+                    sqlite_con.LoadExtension(candidate, "sqlite3_json_init");
+                    return true;
+                }
+                catch (Exception)
+                {
+                    // Try the next candidate; a missing or mismatched DLL must not abort startup.
+                }
+            }
+
+            return false;
+        }
+
         private void FormQueryWindow_Shown(object sender, EventArgs e)
         {
             richTextBox_query.Select(richTextBox_query.Text.Length, 0);
             richTextBox_query.Focus();
+        }
+
+        // Raw Application.DoEvents() is re-entrant: it can dispatch a nested message loop, so a
+        // second DoEvents (or a close/grid edit) can run in the middle of a query and mutate the
+        // SQLite connection and DataSet the query is still writing to. This wrapper keeps the UI
+        // responsive while refusing to re-enter or to pump once the window is going away.
+        private bool pumping;
+        private bool closing;
+
+        private void PumpUi()
+        {
+            if (closing || IsDisposed || Disposing || !IsHandleCreated) return;
+            if (is_stop_query || pumping) return;
+
+            pumping = true;
+            try
+            {
+                Application.DoEvents();
+            }
+            catch (Exception)
+            {
+                // A failure inside a nested pump must not abort the query.
+            }
+            finally
+            {
+                pumping = false;
+            }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Stop pumping before any teardown so an in-flight query cannot resurrect the window.
+            closing = true;
+            queryCancellation?.Cancel();
+            base.OnFormClosing(e);
         }
 
         private void setting_richtextbox()
@@ -207,7 +274,7 @@ namespace RedisGuiManager
             {
                 IDatabase redis = redis_client.GetDB(i);
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-				Application.DoEvents();
+				PumpUi();
 
 				var keys = await FetchKeys(i);
 
@@ -218,7 +285,7 @@ namespace RedisGuiManager
                 {
                     ++toolStripProgressBar_status.Value;
                     toolStripStatusLabel_status.Text = $"Getting DB_{i} values...({toolStripProgressBar_status.Value} / {toolStripProgressBar_status.Maximum})";
-                    Application.DoEvents();
+                    PumpUi();
 
                     try
                     {
@@ -267,7 +334,7 @@ namespace RedisGuiManager
             {
 				IDatabase redis = redis_client.GetDB(i);
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-				Application.DoEvents();
+				PumpUi();
 
 				var keys = await FetchKeys(i);
 
@@ -278,7 +345,7 @@ namespace RedisGuiManager
                 {
                     ++toolStripProgressBar_status.Value;
                     toolStripStatusLabel_status.Text = $"Getting DB_{i} values...({toolStripProgressBar_status.Value} / {toolStripProgressBar_status.Maximum})";
-                    Application.DoEvents();
+                    PumpUi();
 
                     try
                     {
@@ -333,7 +400,7 @@ namespace RedisGuiManager
             {
 				IDatabase redis = redis_client.GetDB(i);
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-				Application.DoEvents();
+				PumpUi();
 
 				var keys = await FetchKeys(i);
 
@@ -399,7 +466,7 @@ namespace RedisGuiManager
             {
 				IDatabase redis = redis_client.GetDB(i);
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-				Application.DoEvents();
+				PumpUi();
 
 				var keys = await FetchKeys(i);
 
@@ -465,7 +532,7 @@ namespace RedisGuiManager
             {
 				IDatabase redis = redis_client.GetDB(i);
 				toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-				Application.DoEvents();
+				PumpUi();
 
 				var keys = await FetchKeys(i);
 
@@ -542,7 +609,7 @@ namespace RedisGuiManager
             {
                 IDatabase redis = redis_client.GetDB(i);
                 toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-                Application.DoEvents();
+                PumpUi();
 
                 var keys = await FetchKeys(i);
 
@@ -555,7 +622,7 @@ namespace RedisGuiManager
 
                     ++toolStripProgressBar_status.Value;
                     toolStripStatusLabel_status.Text = $"Getting DB_{i} values...({toolStripProgressBar_status.Value} / {toolStripProgressBar_status.Maximum})";
-                    Application.DoEvents();
+                    PumpUi();
 
                     try
                     {
@@ -668,7 +735,7 @@ namespace RedisGuiManager
             {
                 IDatabase redis = redis_client.GetDB(i);
                 toolStripStatusLabel_status.Text = $"Getting DB_{i} keys...";
-                Application.DoEvents();
+                PumpUi();
 
                 var keys = await FetchKeys(i);
 
@@ -763,16 +830,68 @@ namespace RedisGuiManager
             return ReadSnapshot(redis_client.ScanKeys(database, filter, Config.scan_page_count), limit);
         }
 
+        // Reused across page renders so paging does not rebuild the table (schema + metadata) every time.
+        private DataTable pageTable;
+        private string pageTableSchema = string.Empty;
+
         private void RenderResultPage()
         {
             if (ds == null || ds.Tables.Count == 0) return;
             var source = ds.Tables[0];
-            var page = source.Clone();
-            foreach (DataRow row in source.Rows.Cast<DataRow>().Skip(resultPages.Offset).Take(PageNavigator.PageSize)) page.ImportRow(row);
-            dataGridView_query_result.DataSource = page;
+
+            // Re-clone only when the result shape changed (new query, or different columns).
+            string schema = string.Join("|", source.Columns.Cast<DataColumn>()
+                .Select(c => c.ColumnName + ":" + c.DataType.FullName));
+            if (pageTable == null || schema != pageTableSchema)
+            {
+                pageTable = source.Clone();
+                pageTableSchema = schema;
+            }
+            else
+            {
+                pageTable.Rows.Clear();
+            }
+
+            foreach (DataRow row in source.Rows.Cast<DataRow>().Skip(resultPages.Offset).Take(PageNavigator.PageSize))
+            {
+                pageTable.ImportRow(row);
+            }
+
+            dataGridView_query_result.DataSource = pageTable;
             resultPages.UpdatePage(source.Rows.Count > resultPages.Offset + PageNavigator.PageSize);
             button_col_row_count.Text = $"{source.Rows.Count} result rows · page {resultPages.Offset / PageNavigator.PageSize + 1}";
         }
+
+        /// <summary>
+        /// Computes a column width from the header plus a bounded sample of values.
+        /// Setting <see cref="DataGridViewColumn.AutoSizeMode"/> to DisplayedCells instead would force
+        /// a full layout pass over every displayed cell, which visibly stalls large result sets.
+        /// </summary>
+        private void SizeColumnsToSample(DataTable table)
+        {
+            var headerFont = dataGridView_query_result.ColumnHeadersDefaultCellStyle.Font ?? Font;
+            var cellFont = dataGridView_query_result.DefaultCellStyle.Font ?? Font;
+            var sample = table.Rows.Cast<DataRow>().Take(200).ToArray();
+
+            for (int i = 0; i < table.Columns.Count && i < dataGridView_query_result.Columns.Count; i++)
+            {
+                DataColumn column = table.Columns[i];
+                int width = TextRenderer.MeasureText(column.ColumnName, headerFont).Width + 16;
+
+                foreach (DataRow row in sample)
+                {
+                    string text = row[i]?.ToString() ?? string.Empty;
+                    // Long values are already truncated for display; measuring them fully is pointless.
+                    if (text.Length > 200) text = text.Substring(0, 200);
+                    width = Math.Max(width, TextRenderer.MeasureText(text, cellFont).Width + 16);
+                    if (width >= MaxColumnWidth) break;
+                }
+
+                dataGridView_query_result.Columns[i].Width = Math.Min(width, MaxColumnWidth);
+            }
+        }
+
+        private const int MaxColumnWidth = 550;
 
         private async Task execute_query(string sql)
         {
@@ -878,7 +997,7 @@ namespace RedisGuiManager
                 }
 
                 toolStripStatusLabel_status.Text = "Querying...";
-                Application.DoEvents();
+                PumpUi();
 
                 command = new SQLiteCommand("COMMIT;", sqlite_con);
                 result = command.ExecuteNonQuery();
@@ -889,7 +1008,7 @@ namespace RedisGuiManager
             try
             {
                 toolStripStatusLabel_status.Text = "Making data grid view...";
-                Application.DoEvents();
+                PumpUi();
 
                 var adapter = new SQLiteDataAdapter(select_sql, sqlite_con);
                 ds = new DataSet();
@@ -901,22 +1020,15 @@ namespace RedisGuiManager
                 queryCancellation.Token.ThrowIfCancellationRequested();
 
                 dataGridView_query_result.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-                dataGridView_query_result.ColumnHeadersVisible = false;
+                dataGridView_query_result.AllowUserToResizeColumns = true;
                 resultPages.Reset();
                 RenderResultPage();
-                dataGridView_query_result.ColumnHeadersVisible = true;
-                dataGridView_query_result.AllowUserToResizeColumns = true;
-                List<int> widths = new List<int>();
-                foreach (DataGridViewColumn col in dataGridView_query_result.Columns)
-                {
-                    col.AutoSizeMode = DataGridViewAutoSizeColumnMode.DisplayedCells;
-                    widths.Add(col.Width > 550 ? 550 : col.Width);
-                    col.AutoSizeMode = DataGridViewAutoSizeColumnMode.NotSet;
-                }
 
-                for (int i = 0; i < widths.Count; ++i)
+                // Widths are derived from a bounded sample instead of DisplayedCells autosizing,
+                // which would force a layout pass over every displayed cell.
+                if (pageTable != null)
                 {
-                    dataGridView_query_result.Columns[i].Width = widths[i];
+                    SizeColumnsToSample(pageTable);
                 }
             }
             catch (SQLiteException sqlite_ex)
@@ -942,17 +1054,6 @@ namespace RedisGuiManager
             {
                 string sql = richTextBox_query.Text;
                 await execute_query(sql);
-            }
-        }
-
-        private void dataGridView_query_result_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            if (e.Value != null)
-            {
-                if (e.Value.ToString().Length > 10000)
-                {
-                    e.Value = e.Value.ToString().Substring(0, 10000);
-                }
             }
         }
 
@@ -1006,59 +1107,97 @@ namespace RedisGuiManager
 
         private void show_context_menu(Control c, Point p)
         {
-            ContextMenuStrip contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("Json viewer", null, new EventHandler(this.CM_json_viewer));
-			contextMenu.Items.Add("Remove selected keys", null, new EventHandler(this.CM_remove_selected_keys));
-
-			contextMenu.Show(c, p);
+            GridUi.ShowValueContextMenu(c, p, CM_json_viewer, CM_remove_selected_keys);
         }
 
-        private void CM_json_viewer(object o, EventArgs e)
+        private void CM_json_viewer()
         {
+            if (dataGridView_query_result.SelectedCells.Count == 0) return;
+
             FormJsonViewer fjv = new FormJsonViewer();
             fjv.Show();
-            fjv.JsonText = dataGridView_query_result.SelectedCells[0].Value.ToString();
+            fjv.JsonText = dataGridView_query_result.SelectedCells[0].Value?.ToString() ?? "";
         }
 
-        private void CM_remove_selected_keys(object o, EventArgs e)
-		{
+        private void CM_remove_selected_keys()
+        {
+            // Collect the targets first so the user confirms exactly what will be deleted.
+            var targets = new List<(IDatabase redis, string key)>();
             if (db_num != -1)
             {
                 IDatabase redis = redis_client.GetDB(db_num);
+                if (redis == null) return;
 
                 foreach (DataGridViewCell cell in dataGridView_query_result.SelectedCells)
                 {
                     if (dataGridView_query_result.Columns[cell.ColumnIndex].Name == "a_key")
                     {
-                        redis.KeyDelete(cell.Value.ToString());
-                        cell.Value = cell.Value.ToString() + "  (Removed)";
+                        targets.Add((redis, cell.Value.ToString()));
                     }
                 }
             }
             else
-			{
+            {
                 if (dataGridView_query_result.Columns.Contains("a_db") == false)
-				{
+                {
                     MessageBox.Show("a_db field required");
                     return;
-				}
-
-                IDatabase redis = null;
+                }
 
                 foreach (DataGridViewCell cell in dataGridView_query_result.SelectedCells)
-				{
-					if (dataGridView_query_result.Columns[cell.ColumnIndex].Name == "a_key")
-					{
+                {
+                    if (dataGridView_query_result.Columns[cell.ColumnIndex].Name == "a_key")
+                    {
                         int a_db = int.Parse(dataGridView_query_result.Rows[cell.RowIndex].Cells["a_db"].Value.ToString());
-                        redis = redis_client.GetDB(a_db);
-                        redis.KeyDelete(cell.Value.ToString());
-						cell.Value = cell.Value.ToString() + "  (Removed)";
-					}
-				}
-			}
+                        IDatabase redis = redis_client.GetDB(a_db);
+                        if (redis == null) continue;
+                        targets.Add((redis, cell.Value.ToString()));
+                    }
+                }
+            }
+
+            if (targets.Count == 0) return;
+
+            // Enforce the connection's read-only flag before asking for confirmation.
+            if (redis_client == null || redis_client.CanWrite() == false) return;
+
+            var preview = string.Join("\r\n", targets.Take(20).Select(t => t.key)
+                .Concat(targets.Count > 20 ? new[] { $"... and {targets.Count - 20} more" } : Array.Empty<string>()));
+            DialogResult confirm = MessageBox.Show(
+                $"Delete {targets.Count} key(s)? This cannot be undone.\r\n\r\n{preview}",
+                "Confirm key removal", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (confirm != DialogResult.Yes) return;
+
+            int removed = 0;
+            var errors = new List<string>();
+            foreach (var target in targets)
+            {
+                try
+                {
+                    if (target.redis.KeyDelete(target.key))
+                    {
+                        removed++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{target.key}: {ex.Message}");
+                }
+            }
+
+            if (errors.Count > 0)
+            {
+                MessageBox.Show(
+                    $"Removed {removed} of {targets.Count} key(s).\r\n\r\nFailed:\r\n{string.Join("\r\n", errors.Take(10))}",
+                    "Key removal finished", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else if (removed == 0)
+            {
+                MessageBox.Show("No keys were removed.", "Key removal finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
 
             checkBox_reuse_table.Checked = false;
-		}
+        }
 
         private void checkBox_reuse_table_CheckedChanged(object sender, EventArgs e)
         {

@@ -167,7 +167,7 @@ namespace RedisGuiManager
             this.dataGridView_stream.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.dataGridView_stream.Size = new System.Drawing.Size(729, 230);
             this.dataGridView_stream.TabIndex = 0;
-            this.dataGridView_stream.CellFormatting += new System.Windows.Forms.DataGridViewCellFormattingEventHandler(this.dataGridView_stream_CellFormatting);
+            
             this.dataGridView_stream.CellMouseUp += new System.Windows.Forms.DataGridViewCellMouseEventHandler(this.dataGridView_stream_CellMouseUp);
             // 
             // Column_id

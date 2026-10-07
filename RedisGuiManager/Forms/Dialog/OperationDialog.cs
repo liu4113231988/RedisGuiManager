@@ -6,11 +6,38 @@ using System.Windows.Forms;
 
 namespace RedisGuiManager
 {
+    /// <summary>
+    /// Result of a non-modal background operation. Distinguishes success, user cancellation
+    /// and failure without resorting to exceptions.
+    /// </summary>
+    public readonly struct OperationOutcome<T>
+    {
+        public bool IsSuccess { get; }
+        public bool IsCanceled { get; }
+        public string Error { get; }
+        public T Value { get; }
+
+        private OperationOutcome(bool success, bool canceled, string error, T value)
+        {
+            IsSuccess = success;
+            IsCanceled = canceled;
+            Error = error;
+            Value = value;
+        }
+
+        public static OperationOutcome<T> Succeeded(T value) => new OperationOutcome<T>(true, false, null, value);
+        public static OperationOutcome<T> Canceled(T value) => new OperationOutcome<T>(false, true, null, value);
+        public static OperationOutcome<T> Failed(string error) => new OperationOutcome<T>(false, false, error, default);
+    }
+
+    /// <summary>
+    /// Progress window for long-running Redis operations. It is shown non-modally, so the main
+    /// window stays interactive (scrolling, switching nodes) while work runs in the background.
+    /// </summary>
     public sealed class OperationDialog : Form
     {
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private readonly Label status = new Label { Dock = DockStyle.Fill, Padding = new Padding(12), AutoEllipsis = true };
-        private bool running = true;
 
         private OperationDialog(string title)
         {
@@ -19,39 +46,72 @@ namespace RedisGuiManager
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MinimizeBox = MaximizeBox = false;
+            ShowInTaskbar = false;
             var cancel = new Button { Text = "Cancel", Dock = DockStyle.Bottom, Height = 30 };
             cancel.Click += (s, e) => { cancellation.Cancel(); cancel.Enabled = false; status.Text = "Canceling at the next safe boundary…"; };
             Controls.Add(status);
             Controls.Add(cancel);
-            FormClosing += (s, e) => { if (running) { cancellation.Cancel(); e.Cancel = true; } };
         }
 
-        public static bool TryRun<T>(IWin32Window owner, string title, Func<CancellationToken, IProgress<string>, T> action, out T result)
+        protected override bool ShowWithoutActivation => true;
+
+        /// <summary>
+        /// Runs <paramref name="action"/> on a background thread behind a non-modal progress
+        /// window. Must be awaited from the UI thread.
+        /// </summary>
+        public static async Task<OperationOutcome<T>> RunAsync<T>(
+            IWin32Window owner,
+            string title,
+            Func<CancellationToken, IProgress<string>, T> action,
+            bool showProgressWindow = true)
         {
-            using var dialog = new OperationDialog(title);
+            var dialog = new OperationDialog(title);
             T value = default;
             Exception error = null;
-            dialog.Shown += async (s, e) =>
-            {
-                var progress = new Progress<string>(message => { if (!dialog.IsDisposed) dialog.status.Text = message; });
-                try
-                {
-                    value = await Task.Run(() => action(dialog.cancellation.Token, progress));
 
+            try
+            {
+                var progress = new Progress<string>(message =>
+                {
+                    if (!dialog.IsDisposed) dialog.status.Text = message;
+                });
+
+                if (showProgressWindow)
+                {
+                    // Show() rather than ShowDialog(): the caller keeps running and the user can
+                    // keep working while the operation proceeds.
+                    dialog.Show(Control.FromHandle(owner?.Handle ?? IntPtr.Zero));
                 }
-                catch (Exception ex) { error = ex; }
-                finally { dialog.running = false; dialog.Close(); }
-            };
-            dialog.ShowDialog(owner);
-            result = value;
-            if (error is OperationCanceledException) return false;
-            if (error != null) { MessageBox.Show(owner, error.Message, title + " failed"); return false; }
-            return true;
+
+                value = await Task.Run(() => action(dialog.cancellation.Token, progress));
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+            finally
+            {
+                if (!dialog.IsDisposed) dialog.Close();
+                dialog.Dispose();
+            }
+
+            if (error is OperationCanceledException) return OperationOutcome<T>.Canceled(value);
+            if (error != null)
+            {
+                if (owner != null) MessageBox.Show(owner, error.Message, title + " failed");
+                return OperationOutcome<T>.Failed(error.Message);
+            }
+
+            return OperationOutcome<T>.Succeeded(value);
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) cancellation.Dispose();
+            if (disposing)
+            {
+                cancellation.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }

@@ -66,6 +66,7 @@ namespace RedisGuiManager
             this.server_info_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.slowlog_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pubsub_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.server_tools_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.serverToolsSeparator = new System.Windows.Forms.ToolStripSeparator();
 			this.reload_server_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.edit_connection_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -310,6 +311,7 @@ namespace RedisGuiManager
             this.server_info_ToolStripMenuItem,
             this.slowlog_ToolStripMenuItem,
             this.pubsub_ToolStripMenuItem,
+            this.server_tools_ToolStripMenuItem,
             this.reload_server_ToolStripMenuItem,
             this.edit_connection_ToolStripMenuItem,
             this.disconnect_connection_ToolStripMenuItem,
@@ -626,6 +628,7 @@ namespace RedisGuiManager
 		private System.Windows.Forms.ToolStripMenuItem server_info_ToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem slowlog_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pubsub_ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem server_tools_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem reload_server_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem edit_connection_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem delete_connection_ToolStripMenuItem;

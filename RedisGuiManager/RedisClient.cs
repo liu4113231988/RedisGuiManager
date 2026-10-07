@@ -17,6 +17,9 @@ namespace RedisGuiManager
 
         public event Action<string> ConnectionStatusChanged;
         public bool IsConnected => connection?.IsConnected == true;
+        // Cluster-aware multiplexer. Pub/Sub must go through the multiplexer rather than a
+        // single IServer, otherwise subscriptions only reach the first endpoint.
+        public ConnectionMultiplexer Multiplexer => connection;
         public bool CanWrite()
         {
             if (!Settings.read_only) return true;
@@ -58,7 +61,12 @@ namespace RedisGuiManager
         {
             ConfigurationOptions cfg = new ConfigurationOptions()
             {
-                AbortOnConnectFail = true,
+                // Keep the multiplexer alive when the server is unreachable so StackExchange.Redis
+                // can restore the link on its own instead of leaving a dead client behind.
+                AbortOnConnectFail = false,
+                ConnectRetry = 3,
+                ReconnectRetryPolicy = new ExponentialRetry(5000),
+                KeepAlive = 30,
                 ConnectTimeout = connectTimeout,
                 DefaultDatabase = 0,
                 Password = settings.auth,
@@ -183,10 +191,19 @@ namespace RedisGuiManager
 
             try
 			{
-                ConnectionStatusChanged?.Invoke("Connecting…");
+                ReportStatus("Connecting…");
                 connection = ConnectionMultiplexer.Connect(temp_config);
-                connection.ConnectionFailed += (s, e) => ConnectionStatusChanged?.Invoke("Disconnected; reconnecting…");
-                connection.ConnectionRestored += (s, e) => ConnectionStatusChanged?.Invoke("Connected");
+
+                // AbortOnConnectFail is off so the multiplexer can recover later, which means
+                // Connect can hand back a client that is not usable yet. Verify explicitly.
+                if (!connection.IsConnected)
+                {
+                    Close();
+                    return new OperateResult(false, $"\r\nConnection fail\r\nCannot reach {string.Join(", ", config.EndPoints.Select(e => e.ToString()))}");
+                }
+
+                connection.ConnectionFailed += (s, e) => ReportStatus("Disconnected; reconnecting…");
+                connection.ConnectionRestored += (s, e) => ReportStatus("Connected");
             }
             catch (RedisConnectionException ex)
 			{
@@ -210,8 +227,20 @@ namespace RedisGuiManager
             }
             Redis = connection.GetDatabase();
 
-            ConnectionStatusChanged?.Invoke("Connected");
+            ReportStatus("Connected");
             return new OperateResult(true, "");
+        }
+
+        // Status text is cosmetic; a broken subscriber must never take down a Redis operation.
+        private void ReportStatus(string message)
+        {
+            try
+            {
+                ConnectionStatusChanged?.Invoke(message);
+            }
+            catch (Exception)
+            {
+            }
         }
 
         public void Close()
@@ -238,15 +267,57 @@ namespace RedisGuiManager
             }
         }
 
+        /// <summary>
+        /// Enumerates matching keys without throwing. Prefer <see cref="TryScanKeys"/> when the
+        /// caller needs to tell "no matches" apart from "the server was unreachable".
+        /// </summary>
         public IEnumerable<StackExchange.Redis.RedisKey> ScanKeys(int database, string pattern = "*", int pageSize = 1000)
         {
-            if (connection == null) throw new InvalidOperationException("Redis not connected");
-            if (!settings.use_cluster) return RedisServer.Keys(database, pattern, pageSize);
-            if (database != 0) throw new ArgumentOutOfRangeException(nameof(database), "Cluster supports DB 0 only");
-            var servers = ClusterPrimaryServers();
-            return servers.SelectMany(s => s.Keys(0, pattern, pageSize)).Distinct();
+            return TryScanKeys(database, pattern, pageSize, out var keys) ? keys : Array.Empty<StackExchange.Redis.RedisKey>();
         }
 
+        public bool TryScanKeys(int database, string pattern, int pageSize, out IEnumerable<StackExchange.Redis.RedisKey> keys)
+        {
+            keys = Array.Empty<StackExchange.Redis.RedisKey>();
+
+            if (connection == null || !connection.IsConnected)
+            {
+                ReportStatus("Not connected");
+                return false;
+            }
+
+            if (!settings.use_cluster)
+            {
+                if (RedisServer == null)
+                {
+                    ReportStatus("Server is not available");
+                    return false;
+                }
+
+                keys = RedisServer.Keys(database, pattern, pageSize);
+                return true;
+            }
+
+            if (database != 0)
+            {
+                ReportStatus("Cluster supports DB 0 only");
+                return false;
+            }
+
+            if (!TryClusterPrimaryServers(out var servers))
+            {
+                return false;
+            }
+
+            keys = servers.SelectMany(s => s.Keys(0, pattern, pageSize)).Distinct();
+            return true;
+        }
+
+        /// <summary>
+        /// Enumerates a whole stream from the beginning. Replays the stream on every call, so paging
+        /// should use <see cref="StreamPageAfter"/> instead; kept because the regression checks
+        /// exercise it for boundary-duplication correctness.
+        /// </summary>
         public IEnumerable<StreamEntry> ScanStream(IDatabase database, string key)
         {
             RedisValue min = "-";
@@ -259,17 +330,109 @@ namespace RedisGuiManager
             }
         }
 
-        private IServer[] ClusterPrimaryServers()
+        /// <summary>
+        /// Reads one hash page starting from <paramref name="cursor"/> and returns the cursor to
+        /// resume from. Unlike <see cref="IDatabase.HashScan(RedisKey, int)"/> this keeps the
+        /// server-side cursor, so paging to page N does not replay the scan from the beginning.
+        /// </summary>
+        public HashScanPage HashScanPage(string key, string cursor, int count)
         {
-            var servers = connection.GetEndPoints().Select(ep => connection.GetServer(ep)).Where(s => !s.IsReplica).ToArray();
+            var raw = (RedisResult[])Redis.Execute("HSCAN", key, cursor, "COUNT", count);
+            string next = (string)raw[0];
+            var flat = (RedisResult[])raw[1];
+            var entries = new List<HashEntry>((flat.Length + 1) / 2);
+            for (int i = 0; i + 1 < flat.Length; i += 2)
+            {
+                entries.Add(new HashEntry((RedisValue)flat[i], (RedisValue)flat[i + 1]));
+            }
+
+            return new HashScanPage(next, entries);
+        }
+
+        /// <summary>Set counterpart of <see cref="HashScanPage"/>.</summary>
+        public SetScanPage SetScanPage(string key, string cursor, int count)
+        {
+            var raw = (RedisResult[])Redis.Execute("SSCAN", key, cursor, "COUNT", count);
+            string next = (string)raw[0];
+            var flat = (RedisResult[])raw[1];
+            var members = new List<RedisValue>(flat.Length);
+            foreach (var item in flat) members.Add((RedisValue)item);
+
+            return new SetScanPage(next, members);
+        }
+
+        /// <summary>
+        /// Reads entries strictly after <paramref name="afterId"/>. Pass null for the first page.
+        /// This replaces the replay-based <see cref="ScanStream"/>, which re-read the whole stream
+        /// every time the user moved to another page.
+        /// </summary>
+        public StreamPage StreamPageAfter(IDatabase database, string key, RedisValue? afterId, int count)
+        {
+            RedisValue min = afterId == null ? (RedisValue)"-" : afterId.Value;
+
+            // IDatabase.StreamRange has no exclusive-minimum overload, and minId is inclusive, so
+            // ask for one extra entry and drop the boundary entry ourselves.
+            var raw = database.StreamRange(key, minId: min, count: count + 2);
+            int start = afterId == null ? 0 : 1;
+
+            var entries = new List<StreamEntry>(count);
+            for (int i = start; i < raw.Length && entries.Count < count; i++)
+            {
+                entries.Add(raw[i]);
+            }
+
+            return new StreamPage(raw.Length - start > count, entries);
+        }
+
+        private bool TryClusterPrimaryServers(out IServer[] servers)
+        {
+            servers = Array.Empty<IServer>();
+            if (connection == null || !connection.IsConnected)
+            {
+                ReportStatus("Not connected");
+                return false;
+            }
+
+            servers = connection.GetEndPoints().Select(ep => connection.GetServer(ep)).Where(s => !s.IsReplica).ToArray();
             if (servers.Length == 0 || servers.Any(s => !s.IsConnected))
-                throw new InvalidOperationException("Not all cluster primary nodes are connected");
-            return servers;
+            {
+                ReportStatus("Not all cluster primary nodes are connected");
+                servers = Array.Empty<IServer>();
+                return false;
+            }
+
+            return true;
         }
 
         public long DatabaseSize(int database)
         {
-            return settings.use_cluster ? ClusterPrimaryServers().Sum(s => s.DatabaseSize(database)) : RedisServer.DatabaseSize(database);
+            return TryDatabaseSize(database, out long size) ? size : -1;
+        }
+
+        public bool TryDatabaseSize(int database, out long size)
+        {
+            size = -1;
+            if (connection == null || !connection.IsConnected)
+            {
+                ReportStatus("Not connected");
+                return false;
+            }
+
+            if (settings.use_cluster)
+            {
+                if (!TryClusterPrimaryServers(out var servers)) return false;
+                size = servers.Sum(s => s.DatabaseSize(database));
+                return true;
+            }
+
+            if (RedisServer == null)
+            {
+                ReportStatus("Server is not available");
+                return false;
+            }
+
+            size = RedisServer.DatabaseSize(database);
+            return true;
         }
 
         public OperateResult SelectDB(int db_num)

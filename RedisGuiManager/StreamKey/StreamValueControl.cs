@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Data;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
@@ -19,8 +20,11 @@ namespace RedisGuiManager
         private StackExchange.Redis.IDatabase database;
         private readonly PageNavigator pages = new PageNavigator();
 
-        private int lastSearchIndex = -1;
-        private string searchCondition = string.Empty;
+        // Last entry ID of each visited page; resuming from it makes paging O(page) instead of
+        // re-reading the stream from the beginning.
+        private readonly CursorStack<RedisValue?> streamCursors = new CursorStack<RedisValue?>();
+
+        private readonly GridUi.SearchState searchState = new GridUi.SearchState();
 
         [Browsable(false)]
         public FormMain MainForm
@@ -47,8 +51,9 @@ namespace RedisGuiManager
                 if ((control.Anchor & AnchorStyles.Bottom) != 0) { if (control.Height > 72) control.Height -= 36; else control.Top -= 36; }
             Controls.Add(pages);
             pages.CanNavigate = valueControl.ConfirmDiscard;
-            pages.PageChanged += RefreshKey;
+            pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_stream);
+            GridUi.LimitCellText(dataGridView_stream);
 
             if (Config.darkmode > 0)
             {
@@ -69,12 +74,12 @@ namespace RedisGuiManager
             dataGridView_stream.Columns[1].Width = dataGridView_stream.Width - 200;
         }
 
-        private void LoadValue_Click(object sender, EventArgs e)
+        private async void LoadValue_Click(object sender, EventArgs e)
         {
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 
-        private void RefreshKey()
+        private async Task RefreshKeyAsync()
         {
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
@@ -89,9 +94,29 @@ namespace RedisGuiManager
                 return;
             }
 
-            if (!OperationDialog.TryRun(this, "Load page", (token, progress) => { var rows = pages.Read(redisClient.ScanStream(database, stringKeyName), token); token.ThrowIfCancellationRequested(); return rows; }, out var batch)) return;
-            pages.UpdatePage(batch.Length > PageNavigator.PageSize);
-            var entries = batch.Take(PageNavigator.PageSize).ToArray();
+            // Entries resume from the last ID of the previous page, so paging no longer re-reads
+            // the whole stream; the request itself runs off the UI thread.
+            int pageIndex = pages.Offset / PageNavigator.PageSize;
+            if (streamCursors.HasCursor(pageIndex) == false)
+            {
+                streamCursors.Reset(null);
+            }
+
+            var afterId = streamCursors.Get(pageIndex);
+            var db = database;
+            var client = redisClient;
+            var key = stringKeyName;
+            var page = await Task.Run(() => client.StreamPageAfter(db, key, afterId, PageNavigator.PageSize));
+
+            // The user may have switched keys while the request was in flight.
+            if (key != stringKeyName) return;
+
+            // Remember the boundary so the next page resumes here instead of re-reading the stream.
+            streamCursors.Set(pageIndex + 1, page.Entries.Count > 0 ? page.Entries[page.Entries.Count - 1].Id : afterId);
+            streamCursors.TrimTo(pageIndex + 2);
+
+            pages.UpdatePage(page.HasMore);
+            var entries = page.Entries.ToArray();
 
             int size = 0;
             for (int i = 0; i < entries.Length; i++)
@@ -137,9 +162,15 @@ namespace RedisGuiManager
             }
         }
 
-        public void SetNewKey(RedisClient redisClient, string key)
+        public async Task SetNewKey(RedisClient redisClient, string key)
         {
-            if (key != stringKeyName || redisClient != this.redisClient) pages.Reset();
+            if (key != stringKeyName || redisClient != this.redisClient)
+            {
+                pages.Reset();
+                // A different key invalidates every retained stream boundary.
+                streamCursors.Reset(null);
+            }
+
             this.redisClient = redisClient;
             database = redisClient.Redis;
             this.stringKeyName = key;
@@ -147,14 +178,14 @@ namespace RedisGuiManager
             dataGridView_stream.SelectionChanged -= dataGridView_stream_SelectionChanged;
 
             keyOperateControl.SetRedisClient(redisClient, key);
-            RefreshKey();
+            await RefreshKeyAsync();
             valueControl.SetValue(string.Empty);
             dataGridView_stream.ClearSelection();
 
             dataGridView_stream.SelectionChanged += dataGridView_stream_SelectionChanged;
         }
 
-        private void button_delete_row_Click(object sender, EventArgs e)
+        private async void button_delete_row_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_stream.SelectedRows.Count <= 0)
@@ -167,10 +198,10 @@ namespace RedisGuiManager
 
             if (MessageBox.Show($"Delete entry [{entryId}] from stream [{stringKeyName}]?", "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
-                var deleted = database.StreamDelete(stringKeyName, new RedisValue[] { entryId });
+                var deleted = await database.StreamDeleteAsync(stringKeyName, new RedisValue[] { entryId });
                 if (deleted > 0)
                 {
-                    RefreshKey();
+                    await RefreshKeyAsync();
                 }
                 else
                 {
@@ -179,28 +210,17 @@ namespace RedisGuiManager
             }
         }
 
-        private void button_insert_row_Click(object sender, EventArgs e)
+        private async void button_insert_row_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             using StreamValueInsertForm form = new StreamValueInsertForm(redisClient, stringKeyName, database: database);
             form.ShowDialog();
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 
-        private void button_refresh_Click(object sender, EventArgs e)
+        private async void button_refresh_Click(object sender, EventArgs e)
         {
-            RefreshKey();
-        }
-
-        private void dataGridView_stream_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            if (e.Value != null)
-            {
-                if (e.Value.ToString().Length > 10000)
-                {
-                    e.Value = e.Value.ToString().Substring(0, 10000);
-                }
-            }
+            await RefreshKeyAsync();
         }
 
         private void dataGridView_stream_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
@@ -221,18 +241,16 @@ namespace RedisGuiManager
 
         private void show_context_menu(Control c, Point p)
         {
-            ContextMenuStrip contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("Json viewer", null, new EventHandler(this.CM_json_viewer));
-            contextMenu.Show(c, p);
+            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
         }
 
-        private void CM_json_viewer(object o, EventArgs e)
+        private void CM_json_viewer()
         {
             if (dataGridView_stream.SelectedRows.Count <= 0) return;
 
             FormJsonViewer fjv = new FormJsonViewer();
             fjv.Show();
-            fjv.JsonText = dataGridView_stream.SelectedRows[0].Cells[1].Value.ToString();
+            fjv.JsonText = dataGridView_stream.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
         }
 
         private void textBox_search_KeyUp(object sender, KeyEventArgs e)
@@ -247,52 +265,7 @@ namespace RedisGuiManager
                 return;
             }
 
-            string search_text = textBox_search.Text;
-            if (string.IsNullOrEmpty(search_text))
-            {
-                return;
-            }
-
-            if (string.IsNullOrEmpty(searchCondition))
-            {
-                searchCondition = search_text;
-            }
-            else
-            {
-                if (searchCondition != search_text)
-                {
-                    lastSearchIndex = -1;
-                    searchCondition = search_text;
-                }
-            }
-
-            for (int i = lastSearchIndex + 1; i < dataGridView_stream.Rows.Count; ++i)
-            {
-                foreach (DataGridViewCell cell in dataGridView_stream.Rows[i].Cells)
-                {
-                    if (cell.Value != null && cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                    {
-                        dataGridView_stream.Rows[i].Selected = true;
-                        dataGridView_stream.CurrentCell = dataGridView_stream.Rows[i].Cells[0];
-                        lastSearchIndex = i;
-                        return;
-                    }
-                }
-            }
-
-            for (int i = 0; i <= lastSearchIndex && i < dataGridView_stream.Rows.Count; ++i)
-            {
-                foreach (DataGridViewCell cell in dataGridView_stream.Rows[i].Cells)
-                {
-                    if (cell.Value != null && cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                    {
-                        dataGridView_stream.Rows[i].Selected = true;
-                        dataGridView_stream.CurrentCell = dataGridView_stream.Rows[i].Cells[0];
-                        lastSearchIndex = i;
-                        return;
-                    }
-                }
-            }
+            GridUi.FindNextMatch(dataGridView_stream, textBox_search, searchState, firstColumnOnly: false);
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace RedisGuiManager
@@ -14,7 +15,14 @@ namespace RedisGuiManager
         private readonly Button next = new Button { Text = "Next", AutoSize = true };
         private readonly Label page = new Label { AutoSize = true, Padding = new Padding(8) };
         private bool committed;
-        public event Action PageChanged;
+        private bool navigating;
+
+        /// <summary>
+        /// Raised when the page changes. Handlers may be asynchronous (loading a page from Redis),
+        /// in which case the navigator waits for them before committing the offset.
+        /// </summary>
+        public event Func<Task> PageChanged;
+
         public Func<bool> CanNavigate { get; set; }
 
         public PageNavigator()
@@ -22,22 +30,53 @@ namespace RedisGuiManager
             Dock = DockStyle.Bottom;
             Height = 36;
             Controls.AddRange(new Control[] { previous, next, page });
-            previous.Click += (s, e) => Navigate(Math.Max(0, Offset - PageSize));
-            next.Click += (s, e) => Navigate(Offset + PageSize);
+            previous.Click += async (s, e) => await NavigateAsync(Math.Max(0, Offset - PageSize));
+            next.Click += async (s, e) => await NavigateAsync(Offset + PageSize);
             UpdatePage(false);
         }
 
-        private void Navigate(int offset)
+        /// <summary>
+        /// Moves to <paramref name="offset"/>. If the <see cref="PageChanged"/> handler does not
+        /// call <see cref="UpdatePage"/> (for example because the user cancelled the load), the
+        /// offset is rolled back so the navigator stays consistent with what is on screen.
+        /// </summary>
+        public async Task<bool> NavigateAsync(int offset)
         {
-            if (CanNavigate != null && !CanNavigate()) return;
+            // Ignore extra clicks while a page load is still running, otherwise two loads would
+            // interleave and paint the wrong rows.
+            if (navigating) return false;
+            if (CanNavigate != null && !CanNavigate()) return false;
+
+            // Clamp defensively: a negative offset would make Read() skip nothing and page backwards.
+            offset = Math.Max(0, offset);
+
+            navigating = true;
             int old = Offset;
             Offset = offset;
             committed = false;
-            try { PageChanged?.Invoke(); if (!committed) Offset = old; }
-            catch { Offset = old; throw; }
+            try
+            {
+                if (PageChanged != null)
+                {
+                    await PageChanged();
+                }
+            }
+            catch
+            {
+                Offset = old;
+                throw;
+            }
+            finally
+            {
+                navigating = false;
+            }
+
+            if (!committed) Offset = old;
+            return committed;
         }
 
         public void Reset() { Offset = 0; UpdatePage(false); }
+
         public void UpdatePage(bool more)
         {
             committed = true;
@@ -46,9 +85,13 @@ namespace RedisGuiManager
             page.Text = $"Page {Offset / PageSize + 1} · search applies to this page";
         }
 
+        /// <summary>
+        /// Reads at most one page worth of items starting at <see cref="Offset"/>, plus one extra
+        /// item so the caller can tell whether another page exists. Prefer cursor-based paging for
+        /// large collections; this replays the source from the beginning on every page.
+        /// </summary>
         public T[] Read<T>(IEnumerable<T> source, CancellationToken token)
         {
-            // ponytail: scans replay earlier pages; use retained SCAN cursors if deep paging becomes common.
             var values = new List<T>();
             int skipped = 0;
             foreach (var item in source)

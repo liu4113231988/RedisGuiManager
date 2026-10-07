@@ -117,6 +117,9 @@ namespace RedisGuiManager
                         Clipboard.SetText(dataGridView_slowlog.SelectedRows[0].Cells[3].Value?.ToString() ?? "");
                     }
                 });
+                // Show() returns immediately, so the menu has to be released once it is dismissed;
+                // otherwise every right-click leaks a handle.
+                menu.Closed += (s, ev) => menu.Dispose();
                 menu.Show(dataGridView_slowlog, e.Location);
             }
         }

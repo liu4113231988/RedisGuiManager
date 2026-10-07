@@ -80,14 +80,14 @@ namespace RedisGuiManager
 					OperateResult connect = client.Connect();
 					if (connect.IsSuccess == false)
 					{
-						textBox_output.AppendText("Connection failed" + "\r\n");
+						AppendOutput("Connection failed" + "\r\n");
 						return;
 					}
 
                     redis = client.GetDB(db_num);
                 }
 
-				textBox_output.AppendText($"{client.Settings.name}:{db_num}> " + textBox_input.Text + Environment.NewLine);
+				AppendOutput($"{client.Settings.name}:{db_num}> " + textBox_input.Text + Environment.NewLine);
 
 				var args = Regex.Matches(textBox_input.Text, @"[\""](?<value>.+?)[\""]|(?<value>[^\s]+)")
                     .Cast<Match>()
@@ -98,43 +98,43 @@ namespace RedisGuiManager
 
 				try
 				{
-                    if (client.Settings.read_only && !new[] { "GET", "MGET", "TYPE", "TTL", "PTTL", "EXISTS", "STRLEN", "HGET", "HGETALL", "HSCAN", "HLEN", "LRANGE", "LLEN", "LINDEX", "SMEMBERS", "SSCAN", "SCARD", "ZRANGE", "ZCARD", "ZSCORE", "XRANGE", "XLEN", "SCAN", "PING", "INFO", "DBSIZE" }.Contains(cmd.ToUpperInvariant()))
-                        throw new InvalidOperationException("Command is not allowed in read-only mode");
+                    if (client.Settings.read_only && Utils.IsReadOnlyCommandAllowed(cmd) == false)
+                        throw new InvalidOperationException($"[{cmd}] is not allowed in read-only mode");
                     var result = redis.Execute(cmd, args);
                     if (result.IsNull)
 					{
-                        textBox_output.AppendText($"(nil)\r\n");
+                        AppendOutput($"(nil)\r\n");
                     }
 
                     switch (result.Type)
 					{
                         case ResultType.None:
 							{
-                                textBox_output.AppendText($"(none)\r\n");
+                                AppendOutput($"(none)\r\n");
                             }
                             break;
 
                         case ResultType.SimpleString:
 							{
-                                textBox_output.AppendText($"{result}\r\n");
+                                AppendOutput($"{result}\r\n");
                             }
                             break;
 
                         case ResultType.Error:
 							{
-                                textBox_output.AppendText($"ERROR : {result}\r\n");
+                                AppendOutput($"ERROR : {result}\r\n");
                             }
                             break;
 
                         case ResultType.Integer:
 							{
-                                textBox_output.AppendText($"(integer) {result}\r\n");
+                                AppendOutput($"(integer) {result}\r\n");
                             }
                             break;
 
                         case ResultType.BulkString:
 							{
-                                textBox_output.AppendText($"{result}\r\n");
+                                AppendOutput($"{result}\r\n");
                             }
                             break;
 
@@ -151,39 +151,72 @@ namespace RedisGuiManager
 										{
                                             if (item.IsNull)
 											{
-                                                textBox_output.AppendText($" {++idx}) (nil)\r\n");
+                                                AppendOutput($" {++idx}) (nil)\r\n");
                                             }
                                             else
 											{
-                                                textBox_output.AppendText($" {++idx}) \"{item}\"\r\n");
+                                                AppendOutput($" {++idx}) \"{item}\"\r\n");
                                             }
                                         }
                                         else
 										{
-                                            textBox_output.AppendText($" {++idx})");
+                                            AppendOutput($" {++idx})");
                                             print_sub_multi_value(item);
                                         }
                                     }
                                 }
                                 else
 								{
-                                    textBox_output.AppendText("(empty list or set)\r\n");
+                                    AppendOutput("(empty list or set)\r\n");
 								}
 							}
                             break;
 					}
 
-                    textBox_output.AppendText($"\r\n");
+                    AppendOutput($"\r\n");
                 }
                 catch (Exception ex)
 				{
-                    textBox_output.AppendText(ex.Message + "\r\n");
+                    AppendOutput(ex.Message + "\r\n");
                 }
 
                 check_change_db(textBox_input.Text);
 
                 textBox_input.Text = "";
             }
+        }
+
+        // A single command (e.g. LRANGE 0 -1 on a big list) can return megabytes, which would grow the
+        // RichTextBox without bound and freeze the UI. Cap per-value and total output size.
+        private const int MaxValueLength = 10_000;
+        private const int MaxOutputLength = 2_000_000;
+
+        private void AppendOutput(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            if (text.Length > MaxValueLength)
+            {
+                text = text.Substring(0, MaxValueLength) +
+                       $"\r\n... [{text.Length - MaxValueLength:N0} more characters truncated]";
+            }
+
+            textBox_output.AppendText(text);
+
+            if (textBox_output.TextLength > MaxOutputLength)
+            {
+                int drop = textBox_output.TextLength - MaxOutputLength;
+                textBox_output.Select(0, drop);
+                textBox_output.SelectedText = string.Empty;
+                textBox_output.SelectionStart = 0;
+                textBox_output.SelectionLength = 0;
+                AppendOutputMarker();
+            }
+        }
+
+        private void AppendOutputMarker()
+        {
+            textBox_output.AppendText("[earlier output trimmed]\r\n");
         }
 
         private void print_sub_multi_value(RedisResult val)
@@ -199,11 +232,11 @@ namespace RedisGuiManager
                     if (is_first)
 					{
                         is_first = false;
-                        textBox_output.AppendText($" {++idx}) \"{item}\"\r\n");
+                        AppendOutput($" {++idx}) \"{item}\"\r\n");
                     }
                     else
 					{
-                        textBox_output.AppendText($"    {++idx}) \"{item}\"\r\n");
+                        AppendOutput($"    {++idx}) \"{item}\"\r\n");
                     }
 				}
 			}
@@ -230,7 +263,7 @@ namespace RedisGuiManager
 				OperateResult connect = client.Connect();
 				if (connect.IsSuccess == false)
 				{
-					textBox_output.AppendText("Connection failed" + "\r\n");
+					AppendOutput("Connection failed" + "\r\n");
 					return;
 				}
 			}

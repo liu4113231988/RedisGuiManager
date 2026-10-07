@@ -28,6 +28,67 @@ namespace RedisGuiManager
         private HashSet<string> _knownFiles = new HashSet<string>();
         private HashSet<string> _failedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Application.DoEvents() runs a nested message loop and is therefore re-entrant: it can
+        // dispatch another selection change (or a tree edit) while the first one is still loading,
+        // which corrupts the node being populated. This wrapper keeps the loading icon responsive
+        // but never lets two pumps overlap.
+        private bool pumpingUi;
+
+        private void PumpUi()
+        {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+            if (pumpingUi) return;
+
+            pumpingUi = true;
+            try
+            {
+                Application.DoEvents();
+            }
+            catch (Exception)
+            {
+                // Never let a nested-pump failure break node loading.
+            }
+            finally
+            {
+                pumpingUi = false;
+            }
+        }
+
+        // Application-level shortcuts. ProcessCmdKey is consulted before the focused control, so
+        // this needs no KeyPreview; the handlers behind the menu items already no-op when the
+        // selected node is not the right kind.
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.F5:
+                    // Let text inputs keep F5 for their own use.
+                    if (IsEditingText(ActiveControl)) break;
+                    reload_keys_ToolStripMenuItem.PerformClick();
+                    if (treeView_server.SelectedNode?.Tag is RedisClient)
+                    {
+                        reload_server_ToolStripMenuItem.PerformClick();
+                    }
+                    return true;
+
+                case Keys.Control | Keys.R:
+                    reload_server_ToolStripMenuItem.PerformClick();
+                    return true;
+
+                case Keys.Control | Keys.F:
+                    if (IsEditingText(ActiveControl)) break;
+                    filter_key_ToolStripMenuItem.PerformClick();
+                    return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private static bool IsEditingText(Control control)
+        {
+            return control is TextBoxBase || control is SyntaxRichTextBox;
+        }
+
         public FormMain()
         {
             InitializeComponent();
@@ -481,7 +542,7 @@ namespace RedisGuiManager
 			}
 		}
 
-        private void remove_db_range_from_list_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void remove_db_range_from_list_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
 			TreeNode select = treeView_server.SelectedNode;
 			if (select == null)
@@ -538,10 +599,10 @@ namespace RedisGuiManager
 						SaveRedisSettings();
 					}
 
-                    RefreshRedisKey(select, true);
-                }
-			}
-		}
+                    await RefreshRedisKeyAsync(select, true);
+                                    }
+                    			}
+                            }
 
         private void find_db_from_list_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
@@ -582,7 +643,7 @@ namespace RedisGuiManager
 			}
 		}
 
-        private void toggle_show_default_dbs_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void toggle_show_default_dbs_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
 			TreeNode select = treeView_server.SelectedNode;
 			if (select == null)
@@ -596,7 +657,7 @@ namespace RedisGuiManager
 
 				SaveRedisSettings();
 
-				RefreshRedisKey(select, true);
+				await RefreshRedisKeyAsync(select, true);
 			}
         }
 
@@ -612,7 +673,7 @@ namespace RedisGuiManager
             PromptBatchDelete(true);
         }
 
-        private void PromptBatchDelete(bool allDatabases)
+        private async void PromptBatchDelete(bool allDatabases)
         {
             var selected = treeView_server.SelectedNode;
             var client = (RedisClient)GetRedisNode(selected).Tag;
@@ -622,17 +683,17 @@ namespace RedisGuiManager
                 ? new[] { db.DBNumber }
                 : allDatabases ? Enumerable.Range(0, client.Settings.use_cluster ? 1 : client.RedisServer.DatabaseCount).ToArray()
                 : selected.Nodes.Cast<TreeNode>().Where(n => n.Tag is DbSettings).Select(n => ((DbSettings)n.Tag).DBNumber).ToArray();
-            RunBatch(client, databases, input.InputValue, "Delete keys", "", (database, key) => database.KeyDelete(key));
-            if (selected.Tag is DbSettings) RefreshDbKeys(selected, true);
+            await RunBatchAsync(client, databases, input.InputValue, "Delete keys", "", (database, key) => database.KeyDelete(key));
+            if (selected.Tag is DbSettings) await RefreshDbKeysAsync(selected, true);
         }
 
-        private void RunBatch(RedisClient client, int[] databases, string pattern, string title, string destination, Func<IDatabase, StackExchange.Redis.RedisKey, bool> execute)
+        private async Task RunBatchAsync(RedisClient client, int[] databases, string pattern, string title, string destination, Func<IDatabase, StackExchange.Redis.RedisKey, bool> execute)
         {
             if (!client.CanWrite()) return;
             string manifest = Path.GetTempFileName();
             try
             {
-                if (!OperationDialog.TryRun(this, "Preview " + title, (token, progress) =>
+                var previewOutcome = await OperationDialog.RunAsync(this, "Preview " + title, (token, progress) =>
                 {
                     long count = 0;
                     var sample = new List<string>();
@@ -648,10 +709,14 @@ namespace RedisGuiManager
                         }
                     }
                     return (Count: count, Sample: sample);
-                }, out var preview)) return;
+                });
+                if (!previewOutcome.IsSuccess) return;
+
+                var preview = previewOutcome.Value;
                 if (preview.Count == 0) { MessageBox.Show(this, "No keys matched.", title); return; }
                 if (MessageBox.Show(this, $"Connection: {client.Settings.name} [{client.Settings.host}:{client.Settings.port}]\nDBs: {string.Join(", ", databases)}\nPattern: {pattern}\nMatched keys: {preview.Count}\n{destination}\n\n{string.Join("\n", preview.Sample)}\n\nContinue? Completed changes remain if canceled.", title + " preview", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-                if (!OperationDialog.TryRun(this, title, (token, progress) =>
+
+                var resultOutcome = await OperationDialog.RunAsync(this, title, (token, progress) =>
                 {
                     var report = new OperationReport();
                     foreach (string line in File.ReadLines(manifest))
@@ -665,13 +730,15 @@ namespace RedisGuiManager
                         if ((report.Success + report.Skipped + report.Errors.Count) % 100 == 0) progress.Report($"Processed {report.Success + report.Skipped + report.Errors.Count} / {preview.Count}");
                     }
                     return report;
-                }, out var result)) return;
-                result.Show(this, title + " result");
+                });
+                if (!resultOutcome.IsSuccess) return;
+
+                resultOutcome.Value.Show(this, title + " result");
             }
             finally { File.Delete(manifest); }
         }
 
-        private void reload_server_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void reload_server_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
@@ -681,11 +748,11 @@ namespace RedisGuiManager
 
             if (select.Tag is RedisClient)
             {
-                RefreshRedisKey(select, true);
+                await RefreshRedisKeyAsync(select, true);
             }
         }
 
-        private void query_window_all_server_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void query_window_all_server_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
@@ -697,8 +764,9 @@ namespace RedisGuiManager
             {
 				if (client.RedisServer == null)
 				{
-					if (!OperationDialog.TryRun(this, "Connect", (token, progress) => client.Connect(), out var connect)) return;
-					if (connect.IsSuccess == false)
+                    var connect = await OperationDialog.RunAsync(this, "Connect", (token, progress) => client.Connect());
+                    if (!connect.IsSuccess) return;
+					if (connect.Value.IsSuccess == false)
 					{
 						MessageBox.Show("Connection failed");
 						return;
@@ -770,7 +838,7 @@ namespace RedisGuiManager
             return client != null && client.CanWrite();
         }
 
-        private void export_data_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void export_data_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var selected = treeView_server.SelectedNode;
             if (selected == null || GetDbNode(selected)?.Tag is not DbSettings dbSettings) return;
@@ -779,7 +847,7 @@ namespace RedisGuiManager
             using var dialog = new SaveFileDialog { Filter = "JSON files (*.json)|*.json", FileName = $"redis_export_db{dbSettings.DBNumber}.json" };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             string path = dialog.FileName;
-            if (!OperationDialog.TryRun(this, "Export data", (token, progress) =>
+            var outcome = await OperationDialog.RunAsync(this, "Export data", (token, progress) =>
             {
                 var report = new OperationReport();
                 string temporary = path + ".partial-" + Guid.NewGuid().ToString("N");
@@ -811,11 +879,13 @@ namespace RedisGuiManager
                     return report;
                 }
                 finally { if (File.Exists(temporary)) File.Delete(temporary); }
-            }, out var result)) return;
+            });
+            if (!outcome.IsSuccess) return;
+            var result = outcome.Value;
             result.Show(this, result.Canceled ? (result.Success > 0 ? "Partial export saved" : "Export canceled; file unchanged") : "Export result");
         }
 
-        private void import_data_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void import_data_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (!CanWriteSelected()) return;
             var selected = treeView_server.SelectedNode;
@@ -826,7 +896,7 @@ namespace RedisGuiManager
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             string path = dialog.FileName;
             if (MessageBox.Show(this, $"Import {Path.GetFileName(path)} to {client.Settings.name} [{client.Settings.host}:{client.Settings.port}], DB {dbSettings.DBNumber}?\nExisting keys will be skipped. Completed imports remain if canceled.", "Confirm import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-            if (!OperationDialog.TryRun(this, "Import data", (token, progress) =>
+            var outcome = await OperationDialog.RunAsync(this, "Import data", (token, progress) =>
             {
                 var report = new OperationReport();
                 using var reader = new JsonTextReader(new StreamReader(path));
@@ -851,9 +921,10 @@ namespace RedisGuiManager
                 }
                 catch (JsonException ex) { report.Errors.Add("Invalid JSON: " + ex.Message); }
                 return report;
-            }, out var result)) return;
-            result.Show(this, "Import result");
-            RefreshDbKeys(GetDbNode(selected), true);
+            });
+            if (!outcome.IsSuccess) return;
+            outcome.Value.Show(this, "Import result");
+            await RefreshDbKeysAsync(GetDbNode(selected), true);
         }
 
         private static bool ImportEntry(IDatabase database, Dictionary<string, object> entry)
@@ -941,7 +1012,7 @@ namespace RedisGuiManager
             return true;
         }
 
-        private void edit_connection_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void edit_connection_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (!ValueControl.ConfirmAll(panel1)) return;
             TreeNode select = treeView_server.SelectedNode;
@@ -966,7 +1037,7 @@ namespace RedisGuiManager
 
                         SaveRedisSettings();
 
-                        RefreshRedisKey(select, true);
+                        await RefreshRedisKeyAsync(select, true);
                     }
                 }
             }
@@ -1018,7 +1089,7 @@ namespace RedisGuiManager
             }
         }
 
-        private void new_key_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void new_key_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (!CanWriteSelected()) return;
             TreeNode select = treeView_server.SelectedNode;
@@ -1041,12 +1112,12 @@ namespace RedisGuiManager
                 using (FormRedisInput redisInput = new FormRedisInput(db))
                 {
                     redisInput.ShowDialog();
-                    RefreshDbKeys(select, true);
+                    await RefreshDbKeysAsync(select, true);
                 }
             }
         }
 
-        private void reload_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void reload_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
@@ -1056,11 +1127,11 @@ namespace RedisGuiManager
 
             if (select.Tag is DbSettings)
             {
-                RefreshDbKeys(select, true);
+                await RefreshDbKeysAsync(select, true);
             }
         }
 
-        private void filter_key_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void filter_key_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
@@ -1078,14 +1149,14 @@ namespace RedisGuiManager
                     if (formInput.ShowDialog() == DialogResult.OK)
                     {
                         dbSettings.Filter = formInput.InputValue == "" ? "*" : formInput.InputValue;
-                        RefreshDbKeys(select, true);
+                        await RefreshDbKeysAsync(select, true);
                         select.ExpandAll();
                     }
                 }
             }
         }
 
-        private void unfilter_key_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void unfilter_key_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
             if (select == null)
@@ -1096,7 +1167,7 @@ namespace RedisGuiManager
             if (select.Tag is DbSettings dbSettings)
             {
                 dbSettings.Filter = "*";
-                RefreshDbKeys(select, true);
+                await RefreshDbKeysAsync(select, true);
                 select.ExpandAll();
             }
         }
@@ -1107,7 +1178,7 @@ namespace RedisGuiManager
             PromptBatchDelete(false);
         }
 
-        private void remove_db_ToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void remove_db_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
 			TreeNode select = treeView_server.SelectedNode;
 			if (select == null)
@@ -1125,7 +1196,7 @@ namespace RedisGuiManager
 
 				SaveRedisSettings();
 
-				RefreshRedisKey(select.Parent, true);
+				await RefreshRedisKeyAsync(select.Parent, true);
 			}
         }
 
@@ -1227,7 +1298,7 @@ namespace RedisGuiManager
             }
         }
 
-        private void treeView_server_AfterSelect(object sender, TreeViewEventArgs e)
+        private async void treeView_server_AfterSelect(object sender, TreeViewEventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
             if (select == null) return;
@@ -1244,19 +1315,19 @@ namespace RedisGuiManager
             select.ImageKey = "loading";
             select.SelectedImageKey = "loading";
             treeView_server.Invalidate(true);
-            Application.DoEvents();
+            PumpUi();
 
             try
             {
             if (select.Tag is RedisClient)
             {
                 CreateRedisShowTagControl<StartControl>();
-                RefreshRedisKey(select);
+                await RefreshRedisKeyAsync(select);
             }
             else if (select.Tag is DbSettings)
             {
                 CreateRedisShowTagControl<StartControl>();
-                RefreshDbKeys(select, false);
+                await RefreshDbKeysAsync(select, false);
             }
             else if (select.Tag is RedisFolder)
             {
@@ -1294,32 +1365,32 @@ namespace RedisGuiManager
                             {
                                 case StackExchange.Redis.RedisType.String:
                                 {
-                                    StringKeySelect(redisClient, select);
+                                    await StringKeySelect(redisClient, select);
                                 }
                                 break;
                                 case StackExchange.Redis.RedisType.List:
                                 {
-                                    ListKeySelect(redisClient, select);
+                                    await ListKeySelect(redisClient, select);
                                 }
                                 break;
                                 case StackExchange.Redis.RedisType.Hash:
                                 {
-                                    HashKeySelect(redisClient, select);
+                                    await HashKeySelect(redisClient, select);
                                 }
                                 break;
                                 case StackExchange.Redis.RedisType.Set:
                                 {
-                                    SetKeySelect(redisClient, select);
+                                    await SetKeySelect(redisClient, select);
                                 }
                                 break;
                                 case StackExchange.Redis.RedisType.SortedSet:
                                 {
-                                    ZSetKeySelect(redisClient, select);
+                                    await ZSetKeySelect(redisClient, select);
                                 }
                                 break;
                                 case StackExchange.Redis.RedisType.Stream:
                                 {
-                                    StreamKeySelect(redisClient, select);
+                                    await StreamKeySelect(redisClient, select);
                                 }
                                 break;
                                 default:
@@ -1432,12 +1503,12 @@ namespace RedisGuiManager
 
                 BuildTreeNode_DB(select, filter_list_keys);
                 if (dbSettings.HasMoreKeys)
-                    select.Nodes.Add(new TreeNode("Load next 500 keys…") { Tag = (Action)(() => LoadDbKeyPage(select)) });
+                    select.Nodes.Add(new TreeNode("Load next 500 keys…") { Tag = (Action)(async () => await LoadDbKeyPageAsync(select)) });
             }
         }
 
         // Refresh key
-        private void RefreshRedisKey(TreeNode select, bool reload = false)
+        private async Task RefreshRedisKeyAsync(TreeNode select, bool reload = false)
         {
             if (select.Tag is RedisClient redisClient)
             {
@@ -1452,7 +1523,9 @@ namespace RedisGuiManager
                 if (reload && !redisClient.IsConnected) redisClient.Close();
                 if (redisClient.Redis == null)
                 {
-                    if (!OperationDialog.TryRun(this, "Connect", (token, progress) => redisClient.Connect(), out var connect)) return;
+                    var connectOutcome = await OperationDialog.RunAsync(this, "Connect", (token, progress) => redisClient.Connect());
+                    if (!connectOutcome.IsSuccess) return;
+                    var connect = connectOutcome.Value;
                     if (connect.IsSuccess == false)
                     {
                         MessageBox.Show(string.Format("Failed to connect to redis[{0}] IpAddress:{1} Port:{2}\r\n", redisClient.Settings.name, redisClient.Settings.host, redisClient.Settings.port) + connect.Message);
@@ -1502,7 +1575,7 @@ namespace RedisGuiManager
             foreach (TreeNode child in node.Nodes) DisposeKeyScans(child);
         }
 
-        private void RefreshDbKeys(TreeNode select, bool reload = false)
+        private async Task RefreshDbKeysAsync(TreeNode select, bool reload = false)
         {
             if (select.Tag is not DbSettings db) return;
             if (!ValueControl.ConfirmAll(panel1)) return;
@@ -1513,14 +1586,14 @@ namespace RedisGuiManager
                 db.KeyScan = client.ScanKeys(db.DBNumber, db.Filter, Config.scan_page_count).GetEnumerator();
                 db.Keys = new List<string>();
                 db.HasMoreKeys = true;
-                LoadDbKeyPage(select);
+                await LoadDbKeyPageAsync(select);
             }
         }
 
-        private void LoadDbKeyPage(TreeNode node)
+        private async Task LoadDbKeyPageAsync(TreeNode node)
         {
             var db = (DbSettings)node.Tag;
-            if (!OperationDialog.TryRun(this, "Load keys", (token, progress) =>
+            var outcome = await OperationDialog.RunAsync(this, "Load keys", (token, progress) =>
             {
                 var page = new List<string>();
                 bool more = true;
@@ -1535,7 +1608,10 @@ namespace RedisGuiManager
                 }
                 catch (RedisException ex) { error = ex.Message; more = false; }
                 return (Keys: page, More: more, Error: error, Canceled: token.IsCancellationRequested);
-            }, out var result)) return;
+            });
+            if (!outcome.IsSuccess) return;
+
+            var result = outcome.Value;
             var existing = db.Keys.ToHashSet(StringComparer.Ordinal);
             db.Keys.AddRange(result.Keys.Where(existing.Add));
             db.HasMoreKeys = result.More;
@@ -1665,7 +1741,15 @@ namespace RedisGuiManager
 
             try
             {
-                long keyCount = redisClient.DatabaseSize(dbNum);
+                if (redisClient.TryDatabaseSize(dbNum, out long keyCount) == false)
+                {
+                    if (msg_box)
+                    {
+                        MessageBox.Show($"Could not read the key count for db{dbNum}. The server may be unreachable.");
+                    }
+
+                    return false;
+                }
 
                 TreeNode dbTree = new TreeNode(string.Format("db{0} ({1})", dbNum, keyCount));
                 dbTree.ImageKey = "redis_db";
@@ -1801,95 +1885,7 @@ namespace RedisGuiManager
             userControl = control;
         }
 
-        private void StringKeySelect(RedisClient client, TreeNode key)
-        {
-            if (userControl == null || (userControl as StringValueControl) == null)
-            {
-                CreateRedisShowTagControl<StringValueControl>();
-            }
-
-            if (userControl is StringValueControl stringValueControl)
-            {
-                stringValueControl.MainForm = this;
-                stringValueControl.TargetNode = key;
-                stringValueControl.SetNewKey(client, key.Text);
-            }
-        }
-
-        private void ListKeySelect(RedisClient client, TreeNode key)
-        {
-            if (userControl == null || (userControl as ListValueControl) == null)
-            {
-                CreateRedisShowTagControl<ListValueControl>();
-            }
-
-            if (userControl is ListValueControl listValueControl)
-            {
-                listValueControl.MainForm = this;
-                listValueControl.TargetNode = key;
-                listValueControl.SetNewKey(client, key.Text);
-            }
-        }
-
-        private void HashKeySelect(RedisClient client, TreeNode key)
-        {
-            if (userControl == null || (userControl as HashValueControl) == null)
-            {
-                CreateRedisShowTagControl<HashValueControl>();
-            }
-
-            if (userControl is HashValueControl hashValueControl)
-            {
-                hashValueControl.MainForm = this;
-                hashValueControl.TargetNode = key;
-                hashValueControl.SetNewKey(client, key.Text);
-            }
-        }
-
-        private void SetKeySelect(RedisClient client, TreeNode key)
-        {
-            if (userControl == null || (userControl as SetValueControl) == null)
-            {
-                CreateRedisShowTagControl<SetValueControl>();
-            }
-
-            if (userControl is SetValueControl setValueControl)
-            {
-                setValueControl.MainForm = this;
-                setValueControl.TargetNode = key;
-                setValueControl.SetNewKey(client, key.Text);
-            }
-        }
-
-        private void ZSetKeySelect(RedisClient client, TreeNode key)
-        {
-            if (userControl == null || (userControl as ZSetValueControl) == null)
-            {
-                CreateRedisShowTagControl<ZSetValueControl>();
-            }
-
-            if (userControl is ZSetValueControl zsetValueControl)
-            {
-                zsetValueControl.MainForm = this;
-                zsetValueControl.TargetNode = key;
-                zsetValueControl.SetNewKey(client, key.Text);
-            }
-        }
-
-        private void StreamKeySelect(RedisClient client, TreeNode key)
-        {
-            if (userControl == null || (userControl as StreamValueControl) == null)
-            {
-                CreateRedisShowTagControl<StreamValueControl>();
-            }
-
-            if (userControl is StreamValueControl streamValueControl)
-            {
-                streamValueControl.MainForm = this;
-                streamValueControl.TargetNode = key;
-                streamValueControl.SetNewKey(client, key.Text);
-            }
-        }
+        // Key-type dispatch for the preview panel lives in FormMain.KeyEditors.cs.
 
         // Load / Save / Add servers
         private RedisClient ObserveClient(RedisClient client)
@@ -2064,7 +2060,8 @@ namespace RedisGuiManager
                     || redis_group.Any(g => g.connections != null && g.connections.Any(s => string.Equals(s.name?.Trim(), newName, StringComparison.OrdinalIgnoreCase)));
                 if (dup)
                 {
-                    MessageBox.Show($"连接名称 \"{newName}\" 已存在，请使用不同名称。", "名称重复", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show($"A connection named \"{newName}\" already exists. Choose a different name.",
+                        "Duplicate name", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -2450,7 +2447,7 @@ namespace RedisGuiManager
 
 		}
 
-		private void copy_key_ToolStripMenuItem_Click(object sender, EventArgs e)
+		private async void copy_key_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
             if (!CanWriteSelected()) return;
 			TreeNode select = treeView_server.SelectedNode;
@@ -2479,14 +2476,14 @@ namespace RedisGuiManager
 
                         if (copy_key_in_same_machine(db, db, src_key, dst_key))
 						{
-                            RefreshDbKeys(dbNode, true);
+                            await RefreshDbKeysAsync(dbNode, true);
                         }
                     }
 				}
 			}
 		}
 
-		private void copy_key_to_db_ToolStripMenuItem_Click(object sender, EventArgs e)
+		private async void copy_key_to_db_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
             if (!CanWriteSelected()) return;
 			TreeNode select = treeView_server.SelectedNode;
@@ -2540,7 +2537,7 @@ namespace RedisGuiManager
                             var dst_db_node = GetDbNodeFromRedisNode(redisNode, dst_db_num);
                             if (dst_db_node != null)
 							{
-                                RefreshDbKeys(dst_db_node, true);
+                                await RefreshDbKeysAsync(dst_db_node, true);
                             }
                         }
 					}
@@ -2592,8 +2589,8 @@ namespace RedisGuiManager
 			}
 		}
 
-		private void migrate_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
-		{
+		private async void migrate_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
             if (!CanWriteSelected()) return;
             var selected = treeView_server.SelectedNode;
             if (selected?.Tag is not DbSettings db) return;
@@ -2603,7 +2600,7 @@ namespace RedisGuiManager
             if (!IPAddress.TryParse(input.Host, out var address)) { MessageBox.Show("Migration requires a target IP address"); return; }
             var target = new IPEndPoint(address, input.Port);
             int targetDb = input.DBNumber;
-            RunBatch(client, new[] { db.DBNumber }, input.KeyPattern, "Copy keys to server", $"Target: {target}, DB {targetDb}", (database, key) =>
+            await RunBatchAsync(client, new[] { db.DBNumber }, input.KeyPattern, "Copy keys to server", $"Target: {target}, DB {targetDb}", (database, key) =>
             {
                 database.KeyMigrate(key, target, targetDb, migrateOptions: MigrateOptions.Copy);
                 return true;

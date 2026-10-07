@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Data;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
@@ -20,8 +21,10 @@ namespace RedisGuiManager
         private StackExchange.Redis.IDatabase database;
         private readonly PageNavigator pages = new PageNavigator();
 
-        private int lastSearchIndex = -1;
-        private string searchCondition = string.Empty;
+        // Server-side HSCAN cursors, one per page boundary, so deep paging does not restart the scan.
+        private readonly CursorStack<string> hashCursors = new CursorStack<string>();
+
+        private readonly GridUi.SearchState searchState = new GridUi.SearchState();
 
         [Browsable(false)]
         public FormMain MainForm
@@ -48,8 +51,9 @@ namespace RedisGuiManager
                 if ((control.Anchor & AnchorStyles.Bottom) != 0) { if (control.Height > 72) control.Height -= 36; else control.Top -= 36; }
             Controls.Add(pages);
             pages.CanNavigate = valueControl.ConfirmDiscard;
-            pages.PageChanged += RefreshKey;
+            pages.PageChanged += () => RefreshKeyAsync();
             valueControl.ProtectSelection(dataGridView_hash);
+            GridUi.LimitCellText(dataGridView_hash);
 
             if (Config.darkmode > 0)
             {
@@ -59,7 +63,7 @@ namespace RedisGuiManager
 
         private void HashValueControl_Load(object sender, EventArgs e)
         {
-            keyOperateControl.LoadValue.Click += LoadValue_Click;
+            keyOperateControl.LoadValue.Click += async (s, e) => await RefreshKeyAsync();
             dataGridView_hash.SelectionChanged += dataGridView_hash_SelectionChanged;
             dataGridView_hash.SizeChanged += dataGridView_hash_SizeChanged;
             dataGridView_hash_SizeChanged(null, null);
@@ -70,12 +74,12 @@ namespace RedisGuiManager
             dataGridView_hash.Columns[1].Width = dataGridView_hash.Width - dataGridView_hash.Columns[0].Width - 20;
         }
 
-        private void LoadValue_Click(object sender, EventArgs e)
+        private async void LoadValue_Click(object sender, EventArgs e)
         {
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 
-        private void RefreshKey()
+        private async Task RefreshKeyAsync()
         {
             if (!valueControl.ConfirmDiscard()) return;
             if (redisClient == null)
@@ -84,9 +88,28 @@ namespace RedisGuiManager
                 return;
             }
 
-            if (!OperationDialog.TryRun(this, "Load page", (token, progress) => { var rows = pages.Read(database.HashScan(stringKeyName, pageSize: PageNavigator.PageSize), token); token.ThrowIfCancellationRequested(); return rows; }, out var batch)) return;
-            pages.UpdatePage(batch.Length > PageNavigator.PageSize);
-            var read = batch.Take(PageNavigator.PageSize).ToArray();
+            // HSCAN keeps its server-side cursor per page, so deep paging does not replay the scan
+            // from the start, and the request runs off the UI thread.
+            int pageIndex = pages.Offset / PageNavigator.PageSize;
+            if (hashCursors.HasCursor(pageIndex) == false)
+            {
+                hashCursors.Reset("0");
+            }
+
+            var cursor = hashCursors.Get(pageIndex);
+            var client = redisClient;
+            var key = stringKeyName;
+            var page = await Task.Run(() => client.HashScanPage(key, cursor, PageNavigator.PageSize));
+
+            // The user may have switched keys or pages while the request was in flight.
+            if (key != stringKeyName) return;
+
+            bool more = page.NextCursor != "0";
+            hashCursors.Set(pageIndex + 1, page.NextCursor);
+            hashCursors.TrimTo(pageIndex + 2);
+
+            pages.UpdatePage(more);
+            var read = page.Entries.Take(PageNavigator.PageSize).ToArray();
 
             int size = 0;
             for (int i = 0; i < read.Length; i++)
@@ -129,9 +152,15 @@ namespace RedisGuiManager
             }
         }
 
-        public void SetNewKey(RedisClient redisClient, string key)
+        public async Task SetNewKey(RedisClient redisClient, string key)
         {
-            if (key != stringKeyName || redisClient != this.redisClient) pages.Reset();
+            if (key != stringKeyName || redisClient != this.redisClient)
+            {
+                pages.Reset();
+                // A different key invalidates every retained HSCAN cursor.
+                hashCursors.Reset("0");
+            }
+
             this.redisClient = redisClient;
             database = redisClient.Redis;
             this.stringKeyName = key;
@@ -139,7 +168,7 @@ namespace RedisGuiManager
             dataGridView_hash.SelectionChanged -= dataGridView_hash_SelectionChanged;
 
             keyOperateControl.SetRedisClient(redisClient, key);
-            RefreshKey();
+            await RefreshKeyAsync();
             valueControl.SetValue(new RedisValue(""));
             textBox_field.Text = string.Empty;
             dataGridView_hash.ClearSelection();
@@ -147,26 +176,27 @@ namespace RedisGuiManager
             dataGridView_hash.SelectionChanged += dataGridView_hash_SelectionChanged;
         }
 
-        private void button_insert_row_Click(object sender, EventArgs e)
+        private async void button_insert_row_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             using (HashValueInsertForm form = new HashValueInsertForm(redisClient, this.stringKeyName, string.Empty, string.Empty, database: database))
             {
                 form.ShowDialog();
-                RefreshKey();
+                await RefreshKeyAsync();
             }
         }
 
-        private void button_delete_row_Click(object sender, EventArgs e)
+        private async void button_delete_row_Click(object sender, EventArgs e)
         {
             if (redisClient == null || !redisClient.CanWrite()) return;
             if (dataGridView_hash.SelectedRows.Count > 0)
             {
                 if (MessageBox.Show(string.Format("Delete Key:{0} Hash key:{1}", stringKeyName, selectField), "Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                 {
-                    if (database.HashDelete(stringKeyName, selectField))
+                    bool removed = await database.HashDeleteAsync(stringKeyName, selectField);
+                    if (removed)
                     {
-                        RefreshKey();
+                        await RefreshKeyAsync();
                     }
                     else
                     {
@@ -180,27 +210,16 @@ namespace RedisGuiManager
             }
         }
 
-        private void button_refresh_Click(object sender, EventArgs e)
+        private async void button_refresh_Click(object sender, EventArgs e)
         {
             if (dataGridView_hash.SelectedRows.Count > 0)
             {
                 DataGridViewRow row = dataGridView_hash.SelectedRows[0];
                 RedisValue field = (RedisValue)row.Cells[0].Value;
-                var read = database.HashGet(stringKeyName, field);
+                var read = await database.HashGetAsync(stringKeyName, field);
                 row.Cells[1].Value = read;
                 valueControl.SetValue(read);
                 textBox_field.Text = field.ToString();
-            }
-        }
-
-        private void dataGridView_hash_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            if (e.Value != null)
-            {
-                if (e.Value.ToString().Length > 10000)
-                {
-                    e.Value = e.Value.ToString().Substring(0, 10000);
-                }
             }
         }
 
@@ -238,165 +257,16 @@ namespace RedisGuiManager
 
         private void show_context_menu(Control c, Point p)
         {
-            ContextMenuStrip contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("Json viewer", null, new EventHandler(this.CM_json_viewer));
-
-            contextMenu.Show(c, p);
+            GridUi.ShowValueContextMenu(c, p, CM_json_viewer);
         }
 
-        private void CM_json_viewer(object o, EventArgs e)
+        private void CM_json_viewer()
         {
+            if (dataGridView_hash.SelectedRows.Count <= 0) return;
+
             FormJsonViewer fjv = new FormJsonViewer();
             fjv.Show();
-            fjv.JsonText = dataGridView_hash.SelectedRows[0].Cells[1].Value.ToString();
-        }
-
-        private void search_field_loop()
-        {
-            string search_text = textBox_search.Text;
-
-            if (string.IsNullOrEmpty(search_text))
-            {
-                return;
-            }
-
-            if (string.IsNullOrEmpty(searchCondition))
-            {
-                searchCondition = search_text;
-            }
-            else
-            {
-                if (searchCondition != search_text)
-                {
-                    lastSearchIndex = -1;
-                    searchCondition = search_text;
-                }
-            }
-
-            foreach (DataGridViewRow row in dataGridView_hash.Rows)
-            {
-                row.Visible = true;
-            }
-
-            for (int i = lastSearchIndex + 1; i < dataGridView_hash.Rows.Count; ++i)
-            {
-                if (checkBox_search_only_field.Checked)
-                {
-                    if (dataGridView_hash.Rows[i].Cells[0].Value.ToString().ToLower().Contains(search_text.ToLower()))
-                    {
-                        dataGridView_hash.Rows[i].Selected = true;
-                        dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[0];
-                        lastSearchIndex = i;
-
-                        return;
-                    }
-                }
-                else
-                {
-                    foreach (DataGridViewCell cell in dataGridView_hash.Rows[i].Cells)
-                    {
-                        if (cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                        {
-                            dataGridView_hash.Rows[i].Selected = true;
-                            dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[0];
-                            lastSearchIndex = i;
-
-                            return;
-                        }
-                    }
-                }
-            }
-
-            // 못 찾으면 처음 부터 한번더 돌아 봄
-            for (int i = 0; i < dataGridView_hash.Rows.Count; ++i)
-            {
-                if (checkBox_search_only_field.Checked)
-                {
-                    if (dataGridView_hash.Rows[i].Cells[0].Value.ToString().ToLower().Contains(search_text.ToLower()))
-                    {
-                        dataGridView_hash.Rows[i].Selected = true;
-                        dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[0];
-
-                        if (lastSearchIndex == i)
-                        {
-                            dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[1];
-                            dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[0];
-                        }
-
-                        lastSearchIndex = i;
-
-                        return;
-                    }
-                }
-                else
-                {
-                    foreach (DataGridViewCell cell in dataGridView_hash.Rows[i].Cells)
-                    {
-                        if (cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                        {
-                            dataGridView_hash.Rows[i].Selected = true;
-                            dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[0];
-
-                            if (lastSearchIndex == i)
-                            {
-                                dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[1];
-                                dataGridView_hash.CurrentCell = dataGridView_hash.Rows[i].Cells[0];
-                            }
-
-                            lastSearchIndex = i;
-
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        private void search_field_grep()
-        {
-            string search_text = textBox_search.Text;
-
-            if (string.IsNullOrEmpty(search_text))
-            {
-                foreach (DataGridViewRow row in dataGridView_hash.Rows)
-                {
-                    row.Visible = true;
-                }
-            }
-            else
-            {
-                foreach (DataGridViewRow row in dataGridView_hash.Rows)
-                {
-                    if (checkBox_search_only_field.Checked)
-                    {
-                        if (row.Cells[0].Value.ToString().ToLower().Contains(search_text.ToLower()))
-                        {
-                            row.Visible = true;
-                        }
-                        else
-                        {
-                            row.Visible = false;
-                        }
-                    }
-                    else
-                    {
-                        foreach (DataGridViewCell cell in row.Cells)
-                        {
-                            if (cell.Value.ToString().ToLower().Contains(search_text.ToLower()))
-                            {
-                                row.Visible = true;
-                                break;
-                            }
-                            else
-                            {
-                                row.Visible = false;
-                            }
-                        }
-                    }
-                }
-
-                dataGridView_hash.ClearSelection();
-            }
+            fjv.JsonText = dataGridView_hash.SelectedRows[0].Cells[1].Value?.ToString() ?? "";
         }
 
         private void textBox_search_KeyUp(object sender, KeyEventArgs e)
@@ -413,15 +283,15 @@ namespace RedisGuiManager
 
             if (checkBox_search_grep.Checked)
             {
-                search_field_grep();
+                GridUi.FilterRows(dataGridView_hash, textBox_search, checkBox_search_only_field.Checked);
             }
             else
             {
-                search_field_loop();
+                GridUi.FindNextMatch(dataGridView_hash, textBox_search, searchState, checkBox_search_only_field.Checked);
             }
         }
 
-        private void button_save_Click(object sender, EventArgs e)
+        private async void button_save_Click(object sender, EventArgs e)
         {
             if (!valueControl.CanEditText || ValueControl.GetDisplayType() == ValueControl.DisplayType.Hex) { MessageBox.Show("Binary/Hex values are read-only"); return; }
             if (redisClient == null || !redisClient.CanWrite()) return;
@@ -445,14 +315,14 @@ namespace RedisGuiManager
 
             try
             {
-                database.ScriptEvaluate(
+                await database.ScriptEvaluateAsync(
                     "if redis.call('HGET',KEYS[1],ARGV[1]) ~= ARGV[2] then return redis.error_reply('Field changed; refresh before saving') end; return redis.call('HSET',KEYS[1],ARGV[1],ARGV[3])",
                     new StackExchange.Redis.RedisKey[] { stringKeyName },
                     new RedisValue[] { selectField, valueControl.OriginalValue, save_text });
             }
             catch (RedisException ex) { MessageBox.Show(ex.Message, "Save failed"); return; }
             valueControl.AcceptChanges();
-            RefreshKey();
+            await RefreshKeyAsync();
         }
 	}
 }
