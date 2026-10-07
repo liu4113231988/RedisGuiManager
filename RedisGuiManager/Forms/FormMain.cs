@@ -819,6 +819,64 @@ namespace RedisGuiManager
             }
         }
 
+        private async void groups_ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!ValueControl.ConfirmAll(panel1)) return;
+
+            // Snapshot membership before editing so connections can move both ways.
+            var beforeGrouped = GroupedConnectionNames(redis_group);
+
+            // Every connection object we know about, both top level and inside a group. Needed to
+            // resolve group members when saving and to find connections dropped from a group.
+            var known = redis_settings
+                .Concat(redis_group.SelectMany(g => g.connections ?? new List<RedisSettings>()))
+                .Where(c => c != null && !string.IsNullOrWhiteSpace(c.name))
+                .GroupBy(c => c.name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var editedGroups = new List<RedisGroup>();
+            using (var dialog = new FormGroups(redis_group, redis_settings))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                editedGroups = dialog.BuildResult(redis_group, known.Values);
+            }
+
+            var afterGrouped = GroupedConnectionNames(editedGroups);
+
+            // A connection is stored either inside a group or at the top level, never both,
+            // otherwise the next save would write it to the file twice.
+            redis_settings.RemoveAll(c => afterGrouped.Contains(c.name));
+
+            foreach (string name in beforeGrouped)
+            {
+                if (afterGrouped.Contains(name)) continue;
+                if (redis_settings.Any(c => string.Equals(c.name, name, StringComparison.OrdinalIgnoreCase))) continue;
+                if (known.TryGetValue(name, out RedisSettings settings)) redis_settings.Add(settings);
+            }
+
+            redis_group.Clear();
+            redis_group.AddRange(editedGroups);
+
+            SaveRedisSettings();
+
+            TreeNode selected = treeView_server.SelectedNode;
+            if (selected != null)
+            {
+                await RefreshRedisKeyAsync(selected, true);
+            }
+
+            toolStripStatusLabel1.Text = $"Groups updated: {redis_group.Count} group(s), {redis_settings.Count} ungrouped";
+        }
+
+        private static HashSet<string> GroupedConnectionNames(IEnumerable<RedisGroup> groups) =>
+            new HashSet<string>(
+                (groups ?? Enumerable.Empty<RedisGroup>())
+                    .Where(g => g?.connections != null)
+                    .SelectMany(g => g.connections)
+                    .Where(c => c != null && !string.IsNullOrWhiteSpace(c.name))
+                    .Select(c => c.name),
+                StringComparer.OrdinalIgnoreCase);
+
         private void server_tools_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;

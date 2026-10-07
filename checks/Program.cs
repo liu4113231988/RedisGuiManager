@@ -53,6 +53,42 @@ static class RegressionChecks
         CheckRedisIfConfigured();
         Console.WriteLine("PASS: credential protection, legacy config, draft isolation, binary editing, failed-file protection");
     }
+    // A connection is persisted either inside a group or at the top level, never both. Verify the
+    // group editor preserves that invariant, since breaking it writes the same connection twice.
+    static void CheckGroupEditing()
+    {
+        var alpha = new RedisSettings { name = "alpha", host = "10.0.0.1", port = 6379 };
+        var beta = new RedisSettings { name = "beta", host = "10.0.0.2", port = 6379 };
+        var gamma = new RedisSettings { name = "gamma", host = "10.0.0.3", port = 6379 };
+        var existingGroup = new RedisGroup { name = "prod", type = "group", connections = new List<RedisSettings> { alpha } };
+        var loose = new List<RedisSettings> { beta, gamma };
+        var groups = new List<RedisGroup> { existingGroup };
+
+        // Resolve members against the union, exactly as FormMain does.
+        var allKnown = loose.Concat(groups.SelectMany(g => g.connections)).ToList();
+
+        using var dialog = new FormGroups(groups, loose);
+        var result = dialog.BuildResult(groups, allKnown);
+
+        Check(result.Count == 1, "Group editing lost or invented a group");
+        Check(result[0].name == "prod", "Existing group name not preserved");
+        Check(result[0].connections.Count == 1 && result[0].connections[0].name == "alpha",
+            "Existing group membership not preserved");
+        Check(ReferenceEquals(result[0], existingGroup), "Group instance replaced, breaking the live tree");
+
+        // Every member must resolve to a real connection object, and no connection may repeat.
+        var memberNames = result.SelectMany(g => g.connections ?? new List<RedisSettings>()).Select(c => c.name).ToList();
+        Check(memberNames.Distinct(StringComparer.OrdinalIgnoreCase).Count() == memberNames.Count,
+            "A connection ended up in more than one group");
+
+        // Ungrouped connections must stay out of every group.
+        Check(!memberNames.Contains("beta", StringComparer.OrdinalIgnoreCase)
+              && !memberNames.Contains("gamma", StringComparer.OrdinalIgnoreCase),
+            "Top-level connection leaked into a group");
+        Check(ReferenceEquals(result[0].connections[0], alpha),
+            "Group member was cloned instead of reusing the live connection");
+    }
+
     static void CheckFeatures()
     {
         var flags = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -62,6 +98,7 @@ static class RegressionChecks
         Check(config.User == "inspector", "ACL username not passed to Redis");
         var copy = JsonConvert.DeserializeObject<RedisSettings>(JsonConvert.SerializeObject(settings));
         Check(copy.username == "inspector" && copy.read_only, "ACL/readonly settings not persisted");
+        CheckGroupEditing();
         using (var root = new Panel())
         using (var editor = new ValueControl())
         {

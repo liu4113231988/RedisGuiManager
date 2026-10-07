@@ -67,6 +67,7 @@ namespace RedisGuiManager
             this.slowlog_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pubsub_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.server_tools_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.groups_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.serverToolsSeparator = new System.Windows.Forms.ToolStripSeparator();
 			this.reload_server_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.edit_connection_ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -312,6 +313,7 @@ namespace RedisGuiManager
             this.slowlog_ToolStripMenuItem,
             this.pubsub_ToolStripMenuItem,
             this.server_tools_ToolStripMenuItem,
+            this.groups_ToolStripMenuItem,
             this.reload_server_ToolStripMenuItem,
             this.edit_connection_ToolStripMenuItem,
             this.disconnect_connection_ToolStripMenuItem,
@@ -433,6 +435,13 @@ namespace RedisGuiManager
 			this.server_tools_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
 			this.server_tools_ToolStripMenuItem.Text = "Server tools";
 			this.server_tools_ToolStripMenuItem.Click += new System.EventHandler(this.server_tools_ToolStripMenuItem_Click);
+			//
+			// groups_ToolStripMenuItem
+			//
+			this.groups_ToolStripMenuItem.Name = "groups_ToolStripMenuItem";
+			this.groups_ToolStripMenuItem.Size = new System.Drawing.Size(306, 24);
+			this.groups_ToolStripMenuItem.Text = "Manage groups";
+			this.groups_ToolStripMenuItem.Click += new System.EventHandler(this.groups_ToolStripMenuItem_Click);
 			// 
 			// reload_server_ToolStripMenuItem
 			// 
@@ -636,6 +645,7 @@ namespace RedisGuiManager
 		private System.Windows.Forms.ToolStripMenuItem slowlog_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pubsub_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem server_tools_ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem groups_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem reload_server_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem edit_connection_ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem delete_connection_ToolStripMenuItem;
