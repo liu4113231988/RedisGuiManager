@@ -1,0 +1,104 @@
+THIRD-PARTY NOTICES
+===================
+
+RedisGuiManager
+---------------
+MIT License — Copyright (c) 2025 JeongRae Kim
+See LICENSE at the repository root.
+
+Bundled native and managed dependencies
+----------------------------------------
+The published ZIP contains these third-party components. Their licenses apply to those
+components, not to the RedisGuiManager sources.
+
+  Newtonsoft.Json              MIT
+  StackExchange.Redis          MIT
+  SSH.NET                      MIT
+  System.Data.SQLite.Core      Apache-2.0
+      Includes the native SQLite.Interop.dll. Apache-2.0 requires that recipients receive
+      the license and the NOTICE file; the SQLite amalgamation's own terms also apply.
+  WPFHexaEditor                MIT
+  .NET runtime (self-contained builds)   MIT
+
+Components vendored into this repository
+-----------------------------------------
+  AutocompleteMenu/            GNU Lesser General Public License v3.0
+      Embedded copy of https://github.com/ekapiuk/AutoCompleteMenu by Pavel Torgashov.
+      This component is NOT MIT licensed. See AutocompleteMenu/LICENSE.
+
+      Compliance summary:
+        - The full LGPLv3 text ships in AutocompleteMenu/LICENSE.
+        - The component's complete corresponding source is distributed as part of the
+          package (the AutocompleteMenu directory is a build project in this solution,
+          not a prebuilt binary), so any recipient can modify or replace it.
+        - RedisGuiManager's own code remains under MIT.
+
+---------------------------------------------------------------------------
+                   GNU LESSER GENERAL PUBLIC LICENSE
+                        Version 3, 29 June 2007
+
+  Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+  Everyone is permitted to copy and distribute verbatim copies of this license
+  document, but changing it is not allowed.
+
+  This version of the GNU Lesser General Public License incorporates the terms
+  and conditions of version 3 of the GNU General Public License, supplemented by
+  the additional permissions listed below.
+
+  The complete text is distributed verbatim in AutocompleteMenu/LICENSE. It is
+  referenced here rather than duplicated so the two copies cannot drift apart, and
+  is also available at https://www.gnu.org/licenses/lgpl-3.0.txt
+
+  0. Additional Definitions.
+
+  As used herein, "this License" refers to version 3 of the GNU Lesser General
+  Public License, and the "GNU GPL" refers to version 3 of the GNU General Public
+  License.
+
+  "The Library" refers to a covered work governed by this License, other than an
+  Application or a Combined Work as defined below.
+
+  1. Exception to Section 3 of the GNU GPL.
+
+  You may convey a covered work under sections 3 and 4 of this License without
+  being bound by section 3 of the GNU GPL.
+
+  2. Conveying Modified Versions.
+
+  If you modify a copy of the Library, and, in your modifications, a facility
+  refers to a function or data to be supplied by an Application that uses the
+  facility (other than as an argument passed when the facility is invoked), then
+  you may convey a copy of the modified version under the terms of this License.
+
+  3. Object Code Incorporating Material from Library Header Files.
+
+  The object code form of an Application may incorporate material from a header
+  file that is part of the Library. You may convey such object code under terms of
+  your choice, provided that the incorporated material is limited to numerical
+  parameters, data structure layouts, accessors, or small macros, inline functions
+  and templates.
+
+  4. Combined Works.
+
+  You may convey a Combined Work under terms of your choice that, taken together,
+  effectively do not restrict modification of the portions of the Library contained
+  in the Combined Work and reverse engineering for debugging such modifications,
+  if you also give prominent notice that the Library is used in it and that the
+  Library and its use are covered by this License, and accompany the Combined Work
+  with a copy of the GNU GPL and this license.
+
+  5. Combined Libraries.
+
+  You may place library facilities that are a work based on the Library side by
+  side in a single library together with other library facilities that are not
+  Applications and are not covered by this License, and convey such a combined
+  library under terms of your choice.
+
+  6. Revised Versions of the GNU Lesser General Public License.
+
+  The Free Software Foundation may publish revised and/or new versions of the GNU
+  Lesser General Public License from time to time. If the Library as you received
+  it specifies that a certain numbered version of the GNU Lesser General Public
+  License "or any later version" applies to it, you have the option of following
+  the terms and conditions either of that published version or of any later version
+  published by the Free Software Foundation.

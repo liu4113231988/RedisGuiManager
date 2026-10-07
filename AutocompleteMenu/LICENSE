@@ -1,0 +1,36 @@
+AutocompleteMenu is redistributed under the GNU Lesser General Public License v3.0.
+
+Upstream project
+----------------
+    AutocompleteMenu
+    https://github.com/ekapiuk/AutoCompleteMenu
+    Author: Pavel Torgashov (and contributors)
+
+    The files in this directory are an embedded copy of that project. They are not covered by
+    the MIT license at the repository root, which applies only to the RedisGuiManager sources
+    outside this directory.
+
+Why this matters
+----------------
+    RedisGuiManager as a whole is MIT licensed, but it links against this LGPLv3 component.
+    Distributing the combined work therefore requires that:
+
+      1. This notice and the full LGPLv3 text are shipped with every distribution
+         (RedisGuiManager-THIRD-PARTY-NOTICES.txt and AutocompleteMenu/LICENSE).
+      2. Recipients can replace this component with a modified version. The AutocompleteMenu
+         sources are part of the distributed package for exactly that reason, so the
+         component can be swapped without rebuilding RedisGuiManager from this repository.
+
+License text
+------------
+    The full text of the GNU Lesser General Public License version 3 is distributed with this
+    directory in the file LICENSE, and is also available at:
+
+        https://www.gnu.org/licenses/lgpl-3.0.txt
+
+Modifications
+-------------
+    Local modifications made for this project, if any, are noted in README.md in this
+    directory. The embedded copy is kept buildable inside this solution
+    (see AutocompleteMenu.csproj) rather than consumed as a NuGet package so the sources
+    remain available for relicensing or replacement.
