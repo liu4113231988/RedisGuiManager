@@ -89,7 +89,84 @@ static class RegressionChecks
             "Group member was cloned instead of reusing the live connection");
     }
 
-    // The string-tools panel is built in code and docks to the bottom; make sure it does not swallow
+    // The import must refuse a file that is not an export before writing anything, and the messages it
+    // shows the user have to name the offending key rather than just the field.
+    static void CheckImportFileInspection()
+    {
+        var inspect = typeof(FormMain).GetMethod("TryInspectImportFile",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Check(inspect != null, "Import file inspector missing");
+
+        string temp = Path.Combine(Path.GetTempPath(), "rgm-import-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            bool accepted = (bool)inspect.Invoke(null, new object[] { temp, 0, null });
+            Check(!accepted, "A missing file was accepted for import");
+
+            File.WriteAllText(temp, "");
+            accepted = (bool)inspect.Invoke(null, new object[] { temp, 0, null });
+            Check(!accepted, "An empty file was accepted for import");
+
+            File.WriteAllText(temp, "{\"not\":\"an array\"}");
+            accepted = (bool)inspect.Invoke(null, new object[] { temp, 0, null });
+            Check(!accepted, "A JSON object was accepted where an array is required");
+
+            File.WriteAllText(temp, "[ {\"key\":\"a\"}, {\"key\":\"b\"}, ");
+            accepted = (bool)inspect.Invoke(null, new object[] { temp, 0, null });
+            Check(!accepted, "Truncated JSON was accepted for import");
+
+            File.WriteAllText(temp, "[]");
+            var args = new object[] { temp, 0, null };
+            accepted = (bool)inspect.Invoke(null, args);
+            Check(accepted && (int)args[1] == 0, "Empty array should be accepted with zero entries");
+
+            File.WriteAllText(temp, "[{\"key\":\"a\",\"dump\":\"x\",\"pttl\":-1},{\"key\":\"b\"},{\"key\":\"c\"}]");
+            args = new object[] { temp, 0, null };
+            accepted = (bool)inspect.Invoke(null, args);
+            Check(accepted && (int)args[1] == 3, $"Expected 3 entries, counted {(int)args[1]}");
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+
+        // Entry-level messages must name the key so a report row is actionable.
+        var import = typeof(FormMain).GetMethod("ImportEntry", BindingFlags.NonPublic | BindingFlags.Static);
+        var db = DispatchProxy.Create<IDatabase, RecordingDatabase>();
+        var messages = new List<string>();
+        var cases = new[]
+        {
+            new Dictionary<string, object> { ["key"] = "k1", ["dump"] = "!!!not base64!!!", ["pttl"] = -1L },
+            new Dictionary<string, object> { ["key"] = "k2", ["dump"] = "AAAA" },
+            new Dictionary<string, object> { ["key"] = "k3", ["dump"] = "AAAA", ["pttl"] = "abc" },
+            new Dictionary<string, object> { ["key"] = "k4" },
+            new Dictionary<string, object> { ["key"] = "k5", ["type"] = "Nope", ["value"] = "x" },
+            new Dictionary<string, object> { ["key"] = "k6", ["type"] = "Hash", ["value"] = new[] { new { value = "no field here" } } },
+            new Dictionary<string, object> { ["key"] = "k7", ["type"] = "List", ["value"] = new string[0] },
+        };
+
+        foreach (var testCase in cases)
+        {
+            try { import.Invoke(null, new object[] { db, testCase }); }
+            catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+            {
+                messages.Add(ex.InnerException.Message);
+            }
+        }
+
+        Check(messages.Count == cases.Length, $"Expected all {cases.Length} malformed entries to be rejected, got {messages.Count}");
+        foreach (string message in messages)
+        {
+            Check(!message.Contains("Exception"), $"Import error leaked an exception type: {message}");
+        }
+        Check(messages.Any(m => m.Contains("k1")), "Base64 error did not name the key");
+        Check(messages.Any(m => m.Contains("pttl") && m.Contains("k3")), "Non-numeric pttl error did not name the field and key");
+        Check(messages.Any(m => m.Contains("k4")), "Entry without dump or value did not name the key");
+        Check(messages.Any(m => m.Contains("Nope")), "Unsupported type error did not name the type");
+        Check(messages.Any(m => m.Contains("field") && m.Contains("k6")), "Hash item error did not name the missing field");
+    }
+
+// The string-tools panel is built in code and docks to the bottom; make sure it does not swallow
     // the editor above it or spill outside its own group box.
     static void CheckStringToolsLayout()
     {
@@ -257,6 +334,7 @@ static class RegressionChecks
         entry = new Dictionary<string, object> { ["key"] = "legacy", ["type"] = "String", ["value"] = "plain" };
         Check((bool)import.Invoke(null, new object[] { database, entry }), "Legacy readable-only import failed");
         Check(recording.UsedKeyRestore == false, "Legacy import did not rebuild the value from commands");
+        CheckImportFileInspection();
         var firstDb = DispatchProxy.Create<IDatabase, RecordingDatabase>();
         var secondDb = DispatchProxy.Create<IDatabase, RecordingDatabase>();
         ((RecordingDatabase)(object)firstDb).StringValue = "original";

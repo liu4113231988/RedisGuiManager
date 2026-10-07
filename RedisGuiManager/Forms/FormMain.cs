@@ -1094,13 +1094,30 @@ namespace RedisGuiManager
             using var dialog = new OpenFileDialog { Filter = "JSON files (*.json)|*.json" };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             string path = dialog.FileName;
-            if (MessageBox.Show(this, $"Import {Path.GetFileName(path)} to {client.Settings.name} [{client.Settings.host}:{client.Settings.port}], DB {dbSettings.DBNumber}?\nExisting keys will be skipped. Completed imports remain if canceled.", "Confirm import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+
+            // Check the file before touching Redis: a wrong file should not start a mutation, and
+            // the confirmation is more useful when it can say how many entries are coming.
+            if (TryInspectImportFile(path, out int entryCount, out string problem) == false)
+            {
+                MessageBox.Show(this, $"{Path.GetFileName(path)} cannot be imported.\r\n\r\n{problem}",
+                    "Invalid import file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (entryCount == 0)
+            {
+                MessageBox.Show(this, $"{Path.GetFileName(path)} contains no entries to import.",
+                    "Nothing to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (MessageBox.Show(this, $"Import {entryCount} entr{(entryCount == 1 ? "y" : "ies")} from {Path.GetFileName(path)} to {client.Settings.name} [{client.Settings.host}:{client.Settings.port}], DB {dbSettings.DBNumber}?\n\nExisting keys will be skipped. Completed imports remain if canceled.", "Confirm import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             var outcome = await OperationDialog.RunAsync(this, "Import data", (token, progress) =>
             {
                 var report = new OperationReport();
                 using var reader = new JsonTextReader(new StreamReader(path));
                 var serializer = new JsonSerializer();
-                if (!reader.Read() || reader.TokenType != JsonToken.StartArray) throw new InvalidDataException("Expected a JSON array");
+                if (!reader.Read() || reader.TokenType != JsonToken.StartArray) throw new InvalidDataException("Expected a JSON array of entries");
                 int index = 0;
                 try
                 {
@@ -1111,9 +1128,16 @@ namespace RedisGuiManager
                     // Parse a complete entry before writing; malformed JSON ends the file with a partial-result report.
                     Dictionary<string, object> entry;
                     try { entry = serializer.Deserialize<Dictionary<string, object>>(reader); }
-                    catch (JsonException ex) { report.Errors.Add($"Entry {index}: {ex.Message}"); break; }
+                    catch (JsonException ex) { report.Errors.Add($"Entry {index}: this is not a JSON object ({ex.Message})"); break; }
+                    if (entry == null) { report.Errors.Add($"Entry {index}: expected a JSON object but found {reader.TokenType}"); break; }
+
+                    string keyName = entry.TryGetValue("key", out var keyValue) ? keyValue?.ToString() : null;
+                    string label = keyName == null ? "no \"key\" field" : $"key \"{keyName}\"";
+
                     try { if (ImportEntry(database, entry)) report.Success++; else report.Skipped++; }
-                    catch (Exception ex) { report.Errors.Add($"Entry {index} ({(entry != null && entry.TryGetValue("key", out var key) ? key : "unknown")}): {ex.Message}"); }
+                    catch (InvalidDataException ex) { report.Errors.Add($"Entry {index} ({label}): {ex.Message}"); }
+                    catch (RedisException ex) { report.Errors.Add($"Entry {index} ({label}): server rejected it - {ex.Message}"); }
+                    catch (Exception ex) { report.Errors.Add($"Entry {index} ({label}): {ex.Message}"); }
                     if (index % 100 == 0) progress.Report($"Processed {index}: imported {report.Success}, skipped {report.Skipped}, failed {report.Errors.Count}");
                 }
                     if (!report.Canceled && reader.TokenType != JsonToken.EndArray) report.Errors.Add("Unexpected end of JSON file; only completed entries were imported");
@@ -1126,44 +1150,151 @@ namespace RedisGuiManager
             await RefreshDbKeysAsync(GetDbNode(selected), true);
         }
 
+        /// <summary>
+        /// Verifies the chosen file is a JSON array of entries and counts them, so the import can be
+        /// refused before any key is written. Returns false with a message aimed at the user rather
+        /// than a raw parser message.
+        /// </summary>
+        private static bool TryInspectImportFile(string path, out int entryCount, out string problem)
+        {
+            entryCount = 0;
+            problem = null;
+
+            try
+            {
+                if (File.Exists(path) == false)
+                {
+                    problem = "The file no longer exists.";
+                    return false;
+                }
+
+                if (new FileInfo(path).Length == 0)
+                {
+                    problem = "The file is empty.";
+                    return false;
+                }
+
+                using var reader = new JsonTextReader(new StreamReader(path))
+                {
+                    // Keep strings as strings so entry values are not coerced to DateTime.
+                    DateParseHandling = DateParseHandling.None
+                };
+
+                if (reader.Read() == false)
+                {
+                    problem = "The file contains no JSON.";
+                    return false;
+                }
+
+                if (reader.TokenType != JsonToken.StartArray)
+                {
+                    problem = $"Expected a JSON array of entries, but the file starts with {reader.TokenType}.";
+                    return false;
+                }
+
+                // Count top-level objects without loading the whole file into memory. Read() simply
+                // returns false at end of input, so a truncated array has to be detected by checking
+                // that the closing bracket was actually seen.
+                bool closed = false;
+                while (reader.Read())
+                {
+                    if (reader.TokenType == JsonToken.EndArray) { closed = true; break; }
+                    if (reader.TokenType == JsonToken.StartObject) entryCount++;
+                }
+
+                if (closed == false)
+                {
+                    problem = "The file ends before the closing ], so it looks truncated or incomplete.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (JsonException ex)
+            {
+                problem = $"The file is not valid JSON: {ex.Message}";
+                return false;
+            }
+            catch (IOException ex)
+            {
+                problem = $"The file could not be read: {ex.Message}";
+                return false;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                problem = $"The file could not be read: {ex.Message}";
+                return false;
+            }
+        }
+
         private static bool ImportEntry(IDatabase database, Dictionary<string, object> entry)
         {
             string key = entry != null && entry.TryGetValue("key", out var keyObj) ? keyObj?.ToString() : null;
             string type = entry != null && entry.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : null;
-            if (key == null) throw new InvalidDataException("Missing key");
-            if (entry.ContainsKey("error")) throw new InvalidDataException("Export entry contains an error");
+            if (key == null) throw new InvalidDataException("Missing \"key\" field");
+
+            // Messages name the key so the report row is actionable without opening the file.
+            string at = $" (key \"{key}\")";
+            if (string.IsNullOrWhiteSpace(key)) throw new InvalidDataException("The \"key\" field is empty");
+            if (entry.ContainsKey("error")) throw new InvalidDataException($"The export recorded an error for this key{at}");
+
             // The dump is authoritative: it is the exact serialised form and preserves the TTL, so it must
             // win over the readable value even when an export carries both.
             if (entry.TryGetValue("dump", out var dump))
             {
-                byte[] payload = Convert.FromBase64String(dump.ToString());
-                long ttl = Convert.ToInt64(entry["pttl"]);
-                if (ttl < -1) throw new InvalidDataException("Invalid TTL");
+                byte[] payload;
+                try
+                {
+                    payload = Convert.FromBase64String(dump.ToString());
+                }
+                catch (FormatException)
+                {
+                    throw new InvalidDataException($"The \"dump\" field is not valid Base64{at}");
+                }
+
+                if (!entry.TryGetValue("pttl", out var pttlValue))
+                {
+                    throw new InvalidDataException($"Missing \"pttl\" field, which \"dump\" requires{at}");
+                }
+
+                if (!long.TryParse(pttlValue?.ToString(), out long ttl))
+                {
+                    throw new InvalidDataException($"The \"pttl\" field is not a number{at}");
+                }
+
+                if (ttl < -1) throw new InvalidDataException($"The \"pttl\" field is {ttl}, but only -1 or milliseconds are valid{at}");
                 if (ttl == 0) return false;
+
                 var restoreKey = entry.TryGetValue("keyBytes", out var encodedKey)
                     ? (StackExchange.Redis.RedisKey)Convert.FromBase64String(encodedKey.ToString()) : (StackExchange.Redis.RedisKey)key;
                 if (database.KeyExists(restoreKey)) return false;
                 database.KeyRestore(restoreKey, payload, ttl < 0 ? null : TimeSpan.FromMilliseconds(ttl));
                 return true;
             }
+
+            if (!entry.TryGetValue("value", out var rawValue) || rawValue == null)
+            {
+                throw new InvalidDataException($"Entry has neither \"dump\" nor \"value\"{at}");
+            }
+
             if (database.KeyExists(key)) return false;
-            var value = JToken.FromObject(entry["value"] ?? throw new InvalidDataException("Missing value"));
+            var value = JToken.FromObject(rawValue);
             var commands = new List<string[]>();
             switch (type)
             {
                 case "String":
-                    if (value.Type != JTokenType.String) throw new InvalidDataException("Expected text value");
+                    if (value.Type != JTokenType.String) throw new InvalidDataException($"Expected a text value for a String key, found {value.Type}{at}");
                     commands.Add(new[] { "SET", key, value.ToString() });
                     break;
                 case "Hash":
                     foreach (var item in (JArray)value)
-                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException("Missing field"), item["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value") });
+                        commands.Add(new[] { "HSET", key, item["field"]?.Value<string>() ?? throw new InvalidDataException($"A hash item is missing \"field\"{at}"), item["value"]?.Value<string>() ?? throw new InvalidDataException($"A hash item is missing \"value\"{at}") });
                     break;
                 case "List":
                 case "Set":
                     foreach (var item in (JArray)value)
                     {
-                        if (item.Type != JTokenType.String) throw new InvalidDataException("Expected text member");
+                        if (item.Type != JTokenType.String) throw new InvalidDataException($"Expected a text member for a {type} key, found {item.Type}{at}");
                         commands.Add(new[] { type == "List" ? "RPUSH" : "SADD", key, item.ToString() });
                     }
                     break;
@@ -1171,37 +1302,43 @@ namespace RedisGuiManager
                     foreach (var item in (JArray)value)
                     {
                         double score = item["score"].Value<double>();
-                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException("Invalid score");
-                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException("Missing member") });
+                        if (double.IsNaN(score) || double.IsInfinity(score)) throw new InvalidDataException($"A sorted-set score is not a finite number{at}");
+                        commands.Add(new[] { "ZADD", key, score.ToString(System.Globalization.CultureInfo.InvariantCulture), item["member"]?.Value<string>() ?? throw new InvalidDataException($"A sorted-set item is missing \"member\"{at}") });
                     }
                     break;
                 case "Stream":
                     ulong previousMs = 0, previousSeq = 0;
                     foreach (var item in (JArray)value)
                     {
-                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException("Missing stream ID");
+                        string id = item["id"]?.Value<string>() ?? throw new InvalidDataException($"A stream entry is missing \"id\"{at}");
                         var parts = id.Split('-');
                         if (parts.Length != 2 || !ulong.TryParse(parts[0], out ulong ms) || !ulong.TryParse(parts[1], out ulong seq) || ms < previousMs || (ms == previousMs && seq <= previousSeq))
-                            throw new InvalidDataException("Stream IDs must be valid and increasing");
+                            throw new InvalidDataException($"Stream IDs must be valid and increasing, but found \"{id}\"{at}");
                         previousMs = ms; previousSeq = seq;
                         var command = new List<string> { "XADD", key, id };
-                        foreach (var field in (JArray)item["fields"])
+                        if (item["fields"] is not JArray fields)
+                            throw new InvalidDataException($"Stream entry {id} is missing its \"fields\" array{at}");
+                        foreach (var field in fields)
                         {
-                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException("Missing field"));
-                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException("Missing value"));
+                            command.Add(field["name"]?.Value<string>() ?? throw new InvalidDataException($"A stream field is missing \"name\"{at}"));
+                            command.Add(field["value"]?.Value<string>() ?? throw new InvalidDataException($"A stream field is missing \"value\"{at}"));
                         }
-                        if (command.Count == 3) throw new InvalidDataException("Stream entry has no fields");
+                        if (command.Count == 3) throw new InvalidDataException($"Stream entry {id} has no fields{at}");
                         commands.Add(command.ToArray());
                     }
                     break;
-                default: throw new InvalidDataException("Unsupported type: " + type);
+                default:
+                    throw new InvalidDataException(type == null
+                        ? $"Entry has a value but no \"type\" field{at}"
+                        : $"Unsupported type \"{type}\"{at}");
             }
-            if (commands.Count == 0) throw new InvalidDataException("Empty collection cannot be restored");
+            if (commands.Count == 0) throw new InvalidDataException($"An empty {type} cannot be restored{at}");
             long legacyTtl = -1;
             if (entry.TryGetValue("ttl", out var ttlObj) && ttlObj != null)
             {
-                legacyTtl = Convert.ToInt64(ttlObj);
-                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException("Invalid TTL");
+                if (!long.TryParse(ttlObj.ToString(), out legacyTtl))
+                    throw new InvalidDataException($"The \"ttl\" field is not a number{at}");
+                if (legacyTtl < -1 || legacyTtl > long.MaxValue / 1000) throw new InvalidDataException($"The \"ttl\" field is out of range{at}");
                 if (legacyTtl == 0) return false;
             }
             var imported = (long)database.ScriptEvaluate(
