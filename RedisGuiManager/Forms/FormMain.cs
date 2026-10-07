@@ -915,6 +915,125 @@ namespace RedisGuiManager
             return client != null && client.CanWrite();
         }
 
+        /// <summary>
+        /// Builds one export record.
+        ///
+        /// The DUMP payload is authoritative and is what ImportEntry restores. "type" and "value"
+        /// are added so the file is readable and greppable, as the documentation promises, but
+        /// they are explicitly best effort: the value is capped per key, and is omitted entirely
+        /// when the payload is binary or the collection exceeds the cap. Because import always
+        /// prefers the dump, a capped or missing value can never corrupt a restore.
+        /// </summary>
+        private static Dictionary<string, object> BuildExportRecord(
+            IDatabase database, StackExchange.Redis.RedisKey key, byte[] dump, long pttl)
+        {
+            var record = new Dictionary<string, object>
+            {
+                ["key"] = key.ToString(),
+                ["keyBytes"] = Convert.ToBase64String((byte[])key),
+                ["dump"] = Convert.ToBase64String(dump),
+                ["pttl"] = pttl
+            };
+
+            try
+            {
+                StackExchange.Redis.RedisType type = database.KeyType(key);
+                record["type"] = type.ToString();
+
+                switch (type)
+                {
+                    case StackExchange.Redis.RedisType.String:
+                        {
+                            long length = database.StringLength(key);
+                            if (length <= ExportValueLimit)
+                            {
+                                record["value"] = database.StringGet(key).ToString();
+                            }
+                            else
+                            {
+                                record["valueTruncated"] = true;
+                            }
+                        }
+                        break;
+
+                    case StackExchange.Redis.RedisType.Hash:
+                        {
+                            var entries = database.HashScan(key, pageSize: ExportValueLimit)
+                                .ToArray();
+                            bool truncated = database.HashLength(key) > entries.Length;
+                            record["value"] = entries
+                                .Select(entry => new Dictionary<string, object>
+                                {
+                                    ["field"] = entry.Name.ToString(),
+                                    ["value"] = entry.Value.ToString()
+                                })
+                                .ToArray();
+                            if (truncated) record["valueTruncated"] = true;
+                        }
+                        break;
+
+                    case StackExchange.Redis.RedisType.List:
+                        {
+                            var items = database.ListRange(key, 0, ExportValueLimit - 1);
+                            if (database.ListLength(key) > items.Length) record["valueTruncated"] = true;
+                            record["value"] = items.Select(item => item.ToString()).ToArray();
+                        }
+                        break;
+
+                    case StackExchange.Redis.RedisType.Set:
+                        {
+                            var members = database.SetScan(key, pageSize: ExportValueLimit).ToArray();
+                            if (database.SetLength(key) > members.Length) record["valueTruncated"] = true;
+                            record["value"] = members.Select(member => member.ToString()).ToArray();
+                        }
+                        break;
+
+                    case StackExchange.Redis.RedisType.SortedSet:
+                        {
+                            var entries = database.SortedSetRangeByRankWithScores(key, 0, ExportValueLimit - 1);
+                            if (database.SortedSetLength(key) > entries.Length) record["valueTruncated"] = true;
+                            record["value"] = entries
+                                .Select(entry => new Dictionary<string, object>
+                                {
+                                    ["member"] = entry.Element.ToString(),
+                                    ["score"] = entry.Score
+                                })
+                                .ToArray();
+                        }
+                        break;
+
+                    case StackExchange.Redis.RedisType.Stream:
+                        {
+                            var entries = database.StreamRange(key, count: ExportValueLimit);
+                            if (database.StreamLength(key) > entries.Length) record["valueTruncated"] = true;
+                            record["value"] = entries
+                                .Select(entry => new Dictionary<string, object>
+                                {
+                                    ["id"] = entry.Id.ToString(),
+                                    ["fields"] = entry.Values
+                                        .Select(field => new Dictionary<string, object>
+                                        {
+                                            ["name"] = field.Name.ToString(),
+                                            ["value"] = field.Value.ToString()
+                                        })
+                                        .ToArray()
+                                })
+                                .ToArray();
+                        }
+                        break;
+                }
+            }
+            catch (RedisException)
+            {
+                // The dump is already captured, so a readable-value failure only costs the extra
+                // fields. Binary keys in particular cannot round-trip through a JSON string.
+            }
+
+            return record;
+        }
+
+        private const int ExportValueLimit = 500;
+
         private async void export_data_ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var selected = treeView_server.SelectedNode;
@@ -939,10 +1058,13 @@ namespace RedisGuiManager
                             if (token.IsCancellationRequested) { report.Canceled = true; break; }
                             try
                             {
+                                // The DUMP payload stays authoritative for restore; type/value are
+                                // added so the file is readable and greppable, as documented.
                                 var snapshot = (RedisResult[])database.ScriptEvaluate(
                                     "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
                                     new StackExchange.Redis.RedisKey[] { key });
-                                serializer.Serialize(writer, new Dictionary<string, object> { ["key"] = key.ToString(), ["keyBytes"] = Convert.ToBase64String((byte[])key), ["dump"] = Convert.ToBase64String((byte[])snapshot[0]), ["pttl"] = (long)snapshot[1] });
+
+                                serializer.Serialize(writer, BuildExportRecord(database, key, (byte[])snapshot[0], (long)snapshot[1]));
                                 report.Success++;
                             }
                             catch (RedisException ex) { report.Errors.Add($"{key}: {ex.Message}"); }
@@ -1010,6 +1132,8 @@ namespace RedisGuiManager
             string type = entry != null && entry.TryGetValue("type", out var typeObj) ? typeObj?.ToString() : null;
             if (key == null) throw new InvalidDataException("Missing key");
             if (entry.ContainsKey("error")) throw new InvalidDataException("Export entry contains an error");
+            // The dump is authoritative: it is the exact serialised form and preserves the TTL, so it must
+            // win over the readable value even when an export carries both.
             if (entry.TryGetValue("dump", out var dump))
             {
                 byte[] payload = Convert.FromBase64String(dump.ToString());

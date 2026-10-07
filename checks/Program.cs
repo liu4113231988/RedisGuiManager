@@ -206,6 +206,30 @@ static class RegressionChecks
         recording.Exists = true;
         entry["pttl"] = 1000L;
         Check(!(bool)import.Invoke(null, new object[] { database, entry }) && recording.Writes == 0, "Import overwrote existing key");
+
+        // An export record carries a best-effort readable "value" alongside the authoritative
+        // "dump". The dump must win, otherwise a truncated or binary value would corrupt a restore.
+        recording.Exists = false;
+        var writesBeforeMixed = recording.Writes;
+        entry = new Dictionary<string, object>
+        {
+            ["key"] = "test",
+            ["type"] = "String",
+            ["value"] = "readable-but-possibly-truncated",
+            ["dump"] = Convert.ToBase64String(new byte[] { 9, 9, 9 }),
+            ["pttl"] = -1L
+        };
+        Check((bool)import.Invoke(null, new object[] { database, entry }), "Import refused a record carrying both dump and value");
+        Check(recording.Writes == writesBeforeMixed + 1,
+            "Import did not restore via the dump when a readable value was also present");
+        Check(recording.UsedKeyRestore,
+            "Readable value was used for restore instead of the dump payload");
+
+        // The readable-only path must still work for the legacy format.
+        recording.Exists = false;
+        entry = new Dictionary<string, object> { ["key"] = "legacy", ["type"] = "String", ["value"] = "plain" };
+        Check((bool)import.Invoke(null, new object[] { database, entry }), "Legacy readable-only import failed");
+        Check(recording.UsedKeyRestore == false, "Legacy import did not rebuild the value from commands");
         var firstDb = DispatchProxy.Create<IDatabase, RecordingDatabase>();
         var secondDb = DispatchProxy.Create<IDatabase, RecordingDatabase>();
         ((RecordingDatabase)(object)firstDb).StringValue = "original";
@@ -366,8 +390,14 @@ public class RecordingDatabase : DispatchProxy
     public int Writes;
     public RedisValue StringValue = "";
     public StreamEntry[] StreamEntries = Array.Empty<StreamEntry>();
+
+    /// <summary>True when the import restored via RESTORE rather than rebuilding from commands.</summary>
+    public bool UsedKeyRestore;
+
     protected override object Invoke(MethodInfo method, object[] args)
     {
+        if (method.Name == "KeyRestore") { UsedKeyRestore = true; Writes++; return true; }
+        if (method.Name == "KeyExists") return Exists;
         if (method.Name == "KeyExists") return Exists;
         if (method.Name == "StreamRange")
         {
@@ -381,6 +411,7 @@ public class RecordingDatabase : DispatchProxy
         if (method.Name == "ScriptEvaluate" || method.Name == "ScriptEvaluateAsync")
         {
             Writes++;
+            UsedKeyRestore = false;
             if (((string)args[0]).Contains("redis.call('GET'")) StringValue = ((RedisValue[])args[2])[1];
             RedisResult result = RedisResult.Create((RedisValue)1);
             return method.Name == "ScriptEvaluateAsync" ? Task.FromResult(result) : (object)result;

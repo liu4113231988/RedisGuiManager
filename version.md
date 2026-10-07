@@ -54,12 +54,17 @@
 
 #### 六、数据导入 / 导出（JSON 格式）
 
-- **导出**：右键 DB 节点 →「Export Data (JSON)」，将当前 DB 的所有 Key（含类型、值、TTL）导出为 JSON 文件。
+- **导出**：右键 DB 节点 →「Export Data (JSON)」，将当前 DB 的所有 Key 导出为 JSON 文件。
   - 支持全部 Redis 数据类型：String、Hash、List、Set、SortedSet、Stream。
-  - 保留 TTL 信息，导入时可恢复。
+  - 每条记录包含 `key`、`keyBytes`、`type`、`dump`、`pttl`，以及尽力而为的 `value`（便于阅读与检索）。
+  - **还原以 `dump` 为准**：`dump` 是 Redis 序列化后的精确快照，能完整保留 TTL 与内部编码；二进制值也能原样还原。
+  - `value` 仅供阅读：每个 Key 最多记录 500 个元素，超出时置 `valueTruncated: true`；二进制值无法用 JSON 表示时直接省略该字段。
+  - 因此「导出文件可读」与「导入能精确还原」互不冲突，导入不会依赖被截断的 `value`。
 - **导入**：右键 DB 节点 →「Import Data (JSON)」，从 JSON 文件批量导入 Key。
   - 导入前弹窗确认条数，支持中断。
   - 支持全部类型反序列化，自动恢复 TTL。
+  - 三种格式均兼容：`dump` 二进制格式（当前导出）、带 `type`+`value` 的可读格式、以及更早的纯文本格式。
+  - 已存在的 Key 会被跳过；解析失败的条目会中止该文件的后续导入并给出报告，已完成的部分保留。
 
 ---
 
