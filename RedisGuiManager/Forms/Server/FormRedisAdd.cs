@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.IO;
 using System.Net;
 using Newtonsoft.Json;
 
@@ -38,6 +39,20 @@ namespace RedisGuiManager
             Controls.Add(usernameInput);
             readOnlyInput.Location = new Point(122, y + 34);
             Controls.Add(readOnlyInput);
+
+            // Private-key path is long and easy to mistype, so offer a file picker next to it.
+            var browseKey = new Button
+            {
+                Text = "...",
+                AccessibleName = "Browse for the SSH private key",
+                Font = textBox_tunnel_key.Font,
+                Location = new Point(textBox_tunnel_key.Right + 6, textBox_tunnel_key.Top),
+                Size = new Size(34, textBox_tunnel_key.Height),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
+            browseKey.Click += button_browse_ssh_key_Click;
+            Controls.Add(browseKey);
+            textBox_tunnel_key.Width = Math.Max(60, textBox_tunnel_key.Width - browseKey.Width - 6);
             ClientSize = new Size(ClientSize.Width, ClientSize.Height + 70);
             MaximumSize = MinimumSize = Size;
 
@@ -138,7 +153,107 @@ namespace RedisGuiManager
                 return false;
             }
 
+            if (checkBox_use_cluster.Checked && CheckClusterEndpoints() == false)
+            {
+                return false;
+            }
+
+            if (checkBox_use_tunnel.Checked && checkBox_use_ssh_key.Checked)
+            {
+                if (string.IsNullOrWhiteSpace(textBox_tunnel_key.Text))
+                {
+                    MessageBox.Show("SSH private key path can not be empty when a key is used.");
+                    return false;
+                }
+
+                if (File.Exists(textBox_tunnel_key.Text) == false)
+                {
+                    MessageBox.Show($"SSH private key not found:\r\n{textBox_tunnel_key.Text}");
+                    return false;
+                }
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// Validates the cluster seed list. The connection silently falls back to a single seed when
+        /// nothing parses, so a typo here would otherwise surface much later as a confusing
+        /// connection error.
+        /// </summary>
+        private bool CheckClusterEndpoints()
+        {
+            string raw = textBox_cluster_endpoints.Text;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                MessageBox.Show("Cluster mode needs at least one seed endpoint, for example 127.0.0.1:7000.");
+                return false;
+            }
+
+            var problems = new List<string>();
+            int accepted = 0;
+
+            foreach (string item in raw.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string endpoint = item.Trim();
+                if (endpoint.Length == 0) continue;
+
+                int separator = endpoint.LastIndexOf(':');
+                if (separator <= 0 || int.TryParse(endpoint.Substring(separator + 1), out int endpointPort) == false
+                    || endpointPort < 1 || endpointPort > 65535)
+                {
+                    problems.Add($"'{endpoint}' is not host:port");
+                    continue;
+                }
+
+                string host = endpoint.Substring(0, separator).Trim();
+                if (host.Length == 0)
+                {
+                    problems.Add($"'{endpoint}' has no host");
+                    continue;
+                }
+
+                accepted++;
+            }
+
+            if (accepted == 0)
+            {
+                MessageBox.Show("No usable cluster endpoint was found. Use host:port, one per line, for example 127.0.0.1:7000.");
+                return false;
+            }
+
+            if (problems.Count > 0)
+            {
+                DialogResult answer = MessageBox.Show(
+                    "These cluster endpoints will be ignored:\r\n\r\n" + string.Join("\r\n", problems) +
+                    "\r\n\r\nSave the connection anyway?",
+                    "Invalid cluster endpoints", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+                return answer == DialogResult.Yes;
+            }
+
+            return true;
+        }
+
+        private void button_browse_ssh_key_Click(object sender, EventArgs e)
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Select SSH private key",
+                Filter = "Private key files (*.pem;*.ppk;*.key)|*.pem;*.ppk;*.key|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (string.IsNullOrWhiteSpace(textBox_tunnel_key.Text) == false)
+            {
+                string directory = Path.GetDirectoryName(textBox_tunnel_key.Text);
+                if (Directory.Exists(directory)) dialog.InitialDirectory = directory;
+            }
+
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                textBox_tunnel_key.Text = dialog.FileName;
+            }
         }
 
         private void button_connection_test_Click(object sender, EventArgs e)
