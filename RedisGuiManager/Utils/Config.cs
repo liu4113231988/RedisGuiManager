@@ -122,14 +122,24 @@ namespace RedisGuiManager
                 // Write to a temporary file first, then swap it in, so a crash mid-write
                 // can never leave a truncated settings file behind.
                 string tmp = path + ".tmp";
-                File.WriteAllText(tmp, save_string, Encoding.UTF8);
-                if (File.Exists(path))
+                try
                 {
-                    File.Replace(tmp, path, path + ".bak");
+                    File.WriteAllText(tmp, save_string, Encoding.UTF8);
+                    if (File.Exists(path))
+                    {
+                        File.Replace(tmp, path, path + ".bak");
+                    }
+                    else
+                    {
+                        File.Move(tmp, path);
+                    }
                 }
-                else
+                catch
                 {
-                    File.Move(tmp, path);
+                    // A leftover .tmp would shadow nothing but confuses the next attempt, and the
+                    // old value stays authoritative, so clean it up before reporting.
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    throw;
                 }
             }
             catch (Exception ex)

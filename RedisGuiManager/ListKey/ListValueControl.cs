@@ -110,7 +110,7 @@ namespace RedisGuiManager
             Utils.ControlDataGridViewRow(dataGridView_list, read.Length);
             for (int i = 0; i < read.Length; i++)
             {
-                dataGridView_list.Rows[i].Cells[0].Value = pages.Offset + i;
+                dataGridView_list.Rows[i].Cells[0].Value = offset + i;
                 dataGridView_list.Rows[i].Cells[1].Value = read[i];
             }
         }
@@ -199,13 +199,18 @@ namespace RedisGuiManager
 
         private async void button_refresh_Click(object sender, EventArgs e)
         {
-            if (this.selectRow != null)
-            {
-                int selectIndex = int.Parse(selectRow.Cells[0].Value.ToString());
-                var read = await database.ListGetByIndexAsync(stringKeyName, selectIndex);
-                selectRow.Cells[1].Value = read.ToString();
-                valueControl.SetValue(read.ToString());
-            }
+            var row = this.selectRow;
+            if (row == null || database == null) return;
+
+            // The index cell comes from the grid, and the row may be recycled by the time the
+            // request returns, so parse defensively and re-resolve the row afterwards.
+            if (int.TryParse(row.Cells[0].Value?.ToString(), out int selectIndex) == false) return;
+
+            var read = await database.ListGetByIndexAsync(stringKeyName, selectIndex);
+            if (IsDisposed || Disposing) return;
+
+            row.Cells[1].Value = read.ToString();
+            valueControl.SetValue(read.ToString());
         }
 
         private async void button_save_Click(object sender, EventArgs e)

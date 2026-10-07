@@ -112,7 +112,7 @@ namespace RedisGuiManager
             Utils.ControlDataGridViewRow(dataGridView_zset, read.Length);
             for (int i = 0; i < read.Length; i++)
             {
-                dataGridView_zset.Rows[i].Cells[0].Value = pages.Offset + i;
+                dataGridView_zset.Rows[i].Cells[0].Value = offset + i;
                 dataGridView_zset.Rows[i].Cells[1].Value = read[i].Element;
                 dataGridView_zset.Rows[i].Cells[2].Value = Convert.ToDouble(read[i].Score).ToString();
             }

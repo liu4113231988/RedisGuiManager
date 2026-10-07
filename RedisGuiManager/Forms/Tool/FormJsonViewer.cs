@@ -26,6 +26,9 @@ namespace RedisGuiManager
                 return richTextBox_text.Text;
             }
         }
+
+        private readonly ImageList jsonImages = new ImageList();
+
         public FormJsonViewer()
         {
             InitializeComponent();
@@ -35,15 +38,16 @@ namespace RedisGuiManager
                 Utils.DarkThemeForm(this);
             }
 
-            ImageList imageList = new ImageList();
-            imageList.Images.Add("json_object", Properties.Resources.json_object);
-            imageList.Images.Add("json_array", Properties.Resources.json_array);
-            imageList.Images.Add("json_num", Properties.Resources.json_num);
-            imageList.Images.Add("json_string", Properties.Resources.json_string);
-            imageList.Images.Add("json_bool", Properties.Resources.json_bool);
-            imageList.Images.Add("json_null", Properties.Resources.json_null);
+            // Kept as a field and released in Dispose: this window opens once per right-click,
+            // so a local ImageList leaked a GDI handle on every use.
+            jsonImages.Images.Add("json_object", Properties.Resources.json_object);
+            jsonImages.Images.Add("json_array", Properties.Resources.json_array);
+            jsonImages.Images.Add("json_num", Properties.Resources.json_num);
+            jsonImages.Images.Add("json_string", Properties.Resources.json_string);
+            jsonImages.Images.Add("json_bool", Properties.Resources.json_bool);
+            jsonImages.Images.Add("json_null", Properties.Resources.json_null);
 
-            treeView_json.ImageList = imageList;
+            treeView_json.ImageList = jsonImages;
         }
 
         private void button_parse_Click(object sender, EventArgs e)

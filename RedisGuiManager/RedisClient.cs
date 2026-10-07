@@ -15,12 +15,18 @@ namespace RedisGuiManager
         private ConnectionMultiplexer connection = null;
         private ConfigurationOptions config = null;
         private RedisSettings settings = null;
+        /// <summary>
+        /// Guards connect/close. Connect runs on a worker thread while the tree may drop the
+        /// connection from the UI thread, and without this the two interleave: one disposes the
+        /// multiplexer the other just assigned.
+        /// </summary>
+        private readonly object gate = new object();
 
         public event Action<string> ConnectionStatusChanged;
         public bool IsConnected => connection?.IsConnected == true;
         // Cluster-aware multiplexer. Pub/Sub must go through the multiplexer rather than a
         // single IServer, otherwise subscriptions only reach the first endpoint.
-        public ConnectionMultiplexer Multiplexer => connection;
+        public ConnectionMultiplexer Multiplexer => System.Threading.Volatile.Read(ref connection);
         public bool CanWrite()
         {
             if (!Settings.read_only) return true;
@@ -131,6 +137,16 @@ namespace RedisGuiManager
 
         public OperateResult Connect()
         {
+            // Serialised against Close() and against other Connect() calls: the tree can trigger a
+            // reload while a previous connect is still running on a worker thread.
+            lock (gate)
+            {
+                return ConnectCore();
+            }
+        }
+
+        private OperateResult ConnectCore()
+        {
             if (config == null)
             {
                 return new OperateResult(false, "\r\nInvalid configuration");
@@ -177,7 +193,7 @@ namespace RedisGuiManager
                     if (Tunnel.IsStarted == false)
                     {
                         string message = "\r\nTunnel not started";
-                        Close();
+                        CloseCore();
                         return new OperateResult(false, message);
                     }
 
@@ -187,7 +203,7 @@ namespace RedisGuiManager
                 }
                 catch (System.Exception ex)
                 {
-                    Close();
+                    CloseCore();
                     return new OperateResult(false, "\r\nTunnel connection fail\r\n" + ex.ToString());
                 }
             }
@@ -201,7 +217,7 @@ namespace RedisGuiManager
                 // Connect can hand back a client that is not usable yet. Verify explicitly.
                 if (!connection.IsConnected)
                 {
-                    Close();
+                    CloseCore();
                     return new OperateResult(false, $"\r\nConnection fail\r\nCannot reach {string.Join(", ", config.EndPoints.Select(e => e.ToString()))}");
                 }
 
@@ -210,12 +226,12 @@ namespace RedisGuiManager
             }
             catch (RedisConnectionException ex)
 			{
-                Close();
+                CloseCore();
                 return new OperateResult(false, "\r\nConnection fail\r\n" + ex.ToString());
 			}
             catch (RedisException ex)
             {
-                Close();
+                CloseCore();
                 return new OperateResult(false, "\r\nConnection fail\r\n" + ex.ToString());
             }
 
@@ -247,6 +263,18 @@ namespace RedisGuiManager
         }
 
         public void Close()
+        {
+            lock (gate)
+            {
+                CloseCore();
+            }
+        }
+
+        /// <summary>
+        /// Releases everything this client owns. Split out of <see cref="Close"/> so the connect path,
+        /// which already holds the lock, can reuse it without deadlocking.
+        /// </summary>
+        private void CloseCore()
         {
             // Report through the guarded helper first: a throwing subscriber must not prevent the
             // multiplexer and the SSH session from being released.

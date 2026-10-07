@@ -51,6 +51,7 @@ static class RegressionChecks
         }
         finally { File.Delete(file); Directory.Delete(dir); }
         CheckConnectionFileOwnership();
+        CheckConcurrentConnectClose();
         CheckFeatures();
         CheckGridUi();
         CheckLocalization();
@@ -76,6 +77,35 @@ static class RegressionChecks
             Check(File.ReadAllText(foreign) == original, "A file that owns no connection was rewritten");
         }
         finally { Directory.Delete(dir, true); }
+    }
+    static void CheckConcurrentConnectClose()
+    {
+        var settings = new RedisSettings { name = "race", host = "127.0.0.1", port = 6379 };
+        var client = new RedisClient(settings);
+        Exception failure = null;
+        var threads = new List<Thread>();
+        for (int i = 0; i < 4; i++)
+        {
+            bool connect = i % 2 == 0;
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    for (int n = 0; n < 5; n++)
+                    {
+                        if (connect) client.Connect(); else client.Close();
+                    }
+                }
+                catch (Exception ex) { failure = ex; }
+            });
+            threads.Add(thread);
+            thread.Start();
+        }
+
+        foreach (Thread thread in threads) thread.Join(5000);
+        client.Close();
+        Check(failure == null, "Concurrent connect/close threw " + failure?.GetType().Name);
+        Check(client.IsConnected == false && client.Redis == null, "Client was left connected after Close");
     }
     // Runtime messages resolve through Resources, so the satellite assembly must carry every key the
     // neutral one has, and a translated value must keep the same format placeholders as its source.

@@ -14,6 +14,12 @@ namespace RedisGuiManager
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
+            // The icon list owns a GDI handle; components alone would leak one per open.
+            if (disposing)
+            {
+                try { jsonImages.Dispose(); } catch { }
+            }
+
             if (disposing && (components != null))
             {
                 components.Dispose();

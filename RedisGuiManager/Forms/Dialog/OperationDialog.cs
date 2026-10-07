@@ -100,7 +100,11 @@ namespace RedisGuiManager
             if (error is OperationCanceledException) return OperationOutcome<T>.Canceled(value);
             if (error != null)
             {
-                if (owner != null) MessageBox.Show(owner, error.Message, title + " failed");
+                // The owner may already be closing; MessageBox.Show would then throw.
+                if (owner is Control alive && alive.IsDisposed == false && alive.IsHandleCreated)
+                {
+                    MessageBox.Show(alive, error.Message, title + " failed");
+                }
                 return OperationOutcome<T>.Failed(error.Message);
             }
 

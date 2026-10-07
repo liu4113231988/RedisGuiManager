@@ -215,16 +215,25 @@ namespace RedisGuiManager
 
         private async void button_refresh_Click(object sender, EventArgs e)
         {
-            if (dataGridView_hash.SelectedRows.Count > 0)
-            {
-                DataGridViewRow row = dataGridView_hash.SelectedRows[0];
-                RedisValue field = (RedisValue)row.Cells[0].Value;
-                var read = await database.HashGetAsync(stringKeyName, field);
-                row.Cells[1].Value = read;
-                valueControl.SetValue(read);
-                textBox_field.Text = field.ToString();
-            }
-        }
+                        if (dataGridView_hash.SelectedRows.Count > 0 && database != null)
+                        {
+                            DataGridViewRow row = dataGridView_hash.SelectedRows[0];
+                            RedisValue field = (RedisValue)row.Cells[0].Value;
+                            var read = await database.HashGetAsync(stringKeyName, field);
+                                                // The row may have been recycled while the request was in flight; writing to a
+                                                // detached row throws, and this handler is async void.
+                                                if (IsDisposed || Disposing) return;
+                                                try
+                                                {
+                                                    row.Cells[1].Value = read;
+                                                    valueControl.SetValue(read);
+                                                    textBox_field.Text = field.ToString();
+                                                }
+                                                catch (InvalidOperationException)
+                                                {
+                                                }
+                                            }
+                                        }
 
         private void dataGridView_hash_KeyUp(object sender, KeyEventArgs e)
         {

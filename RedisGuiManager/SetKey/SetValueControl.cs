@@ -92,7 +92,8 @@ namespace RedisGuiManager
 
             // SSCAN keeps its server-side cursor per page, so deep paging does not replay the scan
             // from the start, and the request runs off the UI thread.
-            int pageIndex = pages.Offset / PageNavigator.PageSize;
+            int offset = pages.Offset;
+            int pageIndex = offset / PageNavigator.PageSize;
             if (setCursors.HasCursor(pageIndex) == false)
             {
                 setCursors.Reset("0");
@@ -125,7 +126,7 @@ namespace RedisGuiManager
             Utils.ControlDataGridViewRow(dataGridView_set, read.Length);
             for (int i = 0; i < read.Length; i++)
             {
-                dataGridView_set.Rows[i].Cells[0].Value = pages.Offset + i;
+                dataGridView_set.Rows[i].Cells[0].Value = offset + i;
                 dataGridView_set.Rows[i].Cells[1].Value = read[i];
             }
         }

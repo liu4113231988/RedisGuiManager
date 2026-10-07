@@ -104,7 +104,7 @@ namespace RedisGuiManager
             list_auto_complete_static.Add(new AutocompleteItem("a_score", 3));
             list_auto_complete_static.Add(new AutocompleteItem(table_name, 0));
 
-            ImageList imageList = new ImageList();
+            ImageList imageList = queryImages;
             imageList.Images.Add("Table_748", Properties.Resources.Table_748);
             imageList.Images.Add("Method_636", Properties.Resources.Method_636);
             imageList.Images.Add("keyword", Properties.Resources.keyword);
@@ -148,6 +148,19 @@ namespace RedisGuiManager
         // responsive while refusing to re-enter or to pump once the window is going away.
         private bool pumping;
         private bool closing;
+        /// <summary>Owned by the form and released with it: a local ImageList would leak its GDI handle.</summary>
+        private readonly ImageList queryImages = new ImageList();
+
+        /// <summary>
+        /// Highest database index to scan. RedisServer is null once the connection dropped, so fall
+        /// back to database 0 rather than dereferencing it.
+        /// </summary>
+        private int LastDatabaseNumber()
+        {
+            if (redis_client == null) return 0;
+            if (redis_client.Settings != null && redis_client.Settings.use_cluster) return 0;
+            return redis_client.RedisServer == null ? 0 : redis_client.RedisServer.DatabaseCount - 1;
+        }
 
         private void PumpUi()
         {
@@ -172,9 +185,15 @@ namespace RedisGuiManager
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             // Stop pumping before any teardown so an in-flight query cannot resurrect the window.
+            // The close can still be vetoed further down (a running query sets e.Cancel), so this
+            // flag is restored when the window survives.
             closing = true;
             queryCancellation?.Cancel();
             base.OnFormClosing(e);
+            if (e.Cancel)
+            {
+                closing = false;
+            }
         }
 
         private void setting_richtextbox()
@@ -205,7 +224,7 @@ namespace RedisGuiManager
                 , redis_client.Settings.name
                 , redis_client.Settings.host
                 , redis_client.Settings.port
-                , db_num == -1 ? $"All [0 ~ {(redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1)}]" : db_num.ToString()
+                , db_num == -1 ? $"All [0 ~ {LastDatabaseNumber()}]" : db_num.ToString()
                 );
 
             this.redis_client = redis_client;
@@ -272,7 +291,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
             int db_num_start = db_num == -1 ? 0 : db_num;
-            int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+            int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -332,7 +351,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+			int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -398,7 +417,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+			int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -464,7 +483,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+			int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -530,7 +549,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
 			int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+			int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -606,7 +625,7 @@ namespace RedisGuiManager
             Dictionary<string, List<KeyValuePair<string, string>>> dic_data = new Dictionary<string, List<KeyValuePair<string, string>>>();
 
             int db_num_start = db_num == -1 ? 0 : db_num;
-			int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+			int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
             string db_n_key = "";
 
             for (int i = db_num_start; i <= db_num_end; ++i)
@@ -733,7 +752,7 @@ namespace RedisGuiManager
             int result = command.ExecuteNonQuery();
 
             int db_num_start = db_num == -1 ? 0 : db_num;
-            int db_num_end = db_num == -1 ? (redis_client.Settings.use_cluster ? 0 : redis_client.RedisServer.DatabaseCount - 1) : db_num;
+            int db_num_end = db_num == -1 ? LastDatabaseNumber() : db_num;
 
             for (int i = db_num_start; i <= db_num_end; ++i)
             {
@@ -1095,6 +1114,8 @@ namespace RedisGuiManager
             try { sqlite_con?.Close(); } catch { }
             try { sqlite_con?.Dispose(); } catch { }
             sqlite_con = null;
+
+            try { queryImages.Dispose(); } catch { }
         }
 
         private async void richTextBox_query_KeyUp(object sender, KeyEventArgs e)
