@@ -181,7 +181,13 @@ namespace RedisGuiManager
                     AppendOutput(ex.Message + "\r\n");
                 }
 
-                check_change_db(textBox_input.Text);
+                // Only a command that actually ran may move the local db pointer. In read-only mode
+                // SELECT is rejected, so switching anyway would silently redirect every later
+                // command to a database the user never picked.
+                if (Utils.IsReadOnlyCommandAllowed(textBox_input.Text))
+                {
+                    check_change_db(textBox_input.Text);
+                }
 
                 textBox_input.Text = "";
             }

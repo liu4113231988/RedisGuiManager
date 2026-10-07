@@ -76,7 +76,7 @@ namespace RedisGuiManager
 
                 if (is_same_node)
                 {
-                    treeView_server_AfterSelect(null, null);
+                    RunGuardedAsync(() => SelectNodeAsync(select));
                 }
 
                 if (select.IsExpanded)
@@ -93,6 +93,16 @@ namespace RedisGuiManager
         private async void treeView_server_AfterSelect(object sender, TreeViewEventArgs e)
         {
             TreeNode select = treeView_server.SelectedNode;
+            if (select == null) return;
+            await SelectNodeAsync(select);
+        }
+
+        /// <summary>
+        /// Loads the value editor for <paramref name="select"/>. Callers that are not event handlers
+        /// await this instead of firing an async void, so a failure can still be observed.
+        /// </summary>
+        private async Task SelectNodeAsync(TreeNode select)
+        {
             if (select == null) return;
             // Tag 可能为 null（新创建的临时节点），直接返回
             if (select.Tag == null) return;
@@ -152,6 +162,8 @@ namespace RedisGuiManager
                             }
 
                             toolStripStatusLabel1.Text = $"{redisClient.Settings.name} · DB {dbSettings.DBNumber} · {(redisClient.IsConnected ? "Connected" : "Disconnected")} {(redisClient.Settings.read_only ? "· read-only" : "")}";
+                            // Redis is null once a connection was closed or never established.
+                            if (redisClient.Redis == null) { select.ImageKey = old_imagekey; select.SelectedImageKey = old_imagekey; return; }
                             var type = redisClient.Redis.KeyType(select.Text);
                             switch (type)
                             {
@@ -208,10 +220,20 @@ namespace RedisGuiManager
             {
                 MessageBox.Show(this, ex.Message + "\nReload the connection to retry.", "Redis request failed");
             }
+            catch (Exception ex)
+            {
+                // A dropped connection nulls out RedisClient.Redis, so selecting a node can also
+                // fail with NullReferenceException or ObjectDisposedException. Those must not
+                // escape an async void handler.
+                ReportBackgroundFailure(ex);
+            }
             finally
             {
-                select.ImageKey = old_imagekey;
-                select.SelectedImageKey = old_imagekey;
+                if (IsDisposed == false && Disposing == false)
+                {
+                    select.ImageKey = old_imagekey;
+                    select.SelectedImageKey = old_imagekey;
+                }
             }
         }
 
@@ -295,7 +317,37 @@ namespace RedisGuiManager
 
                 BuildTreeNode_DB(select, filter_list_keys);
                 if (dbSettings.HasMoreKeys)
-                    select.Nodes.Add(new TreeNode("Load next 500 keys…") { Tag = (Action)(async () => await LoadDbKeyPageAsync(select)) });
+                    select.Nodes.Add(new TreeNode("Load next 500 keys…") { Tag = (Action)(() => RunGuardedAsync(() => LoadDbKeyPageAsync(select))) });
+            }
+        }
+
+        /// <summary>
+        /// Runs a fire-and-forget task with a catch-all: these are invoked from synchronous contexts
+        /// (menu items, tree node tags), so an escaping exception would reach
+        /// Application.ThreadException and close the application.
+        /// </summary>
+        private async void RunGuardedAsync(Func<Task> work)
+        {
+            try
+            {
+                await work();
+            }
+            catch (Exception ex)
+            {
+                ReportBackgroundFailure(ex);
+            }
+        }
+
+        private void ReportBackgroundFailure(Exception ex)
+        {
+            if (ex == null || IsDisposed || Disposing || shuttingDown) return;
+            try
+            {
+                MessageBox.Show(this, ex.Message, "Operation failed; refresh before retrying", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch
+            {
+                // The form may be closing while the message box is requested.
             }
         }
 

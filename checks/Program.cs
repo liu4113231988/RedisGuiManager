@@ -50,11 +50,32 @@ static class RegressionChecks
             Check(File.ReadAllText(file) == "broken original contents", "Failed connection file was overwritten");
         }
         finally { File.Delete(file); Directory.Delete(dir); }
+        CheckConnectionFileOwnership();
         CheckFeatures();
         CheckGridUi();
         CheckLocalization();
         CheckRedisIfConfigured();
         Console.WriteLine("PASS: credential protection, legacy config, draft isolation, binary editing, failed-file protection, shared grid helpers, localized text");
+    }
+    // Saving must only rewrite connection files this application owns. The connections directory is
+    // user-visible, so an unrelated JSON sitting next to the connections must survive untouched.
+    static void CheckConnectionFileOwnership()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "RedisGuiManager-own-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string foreign = Path.Combine(dir, "notes.json");
+        string original = "{ \"my\": \"important notes\" }";
+        File.WriteAllText(foreign, original);
+        try
+        {
+            using var main = new FormMain();
+            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            // A file is only ever rewritten once it has contributed an entry.
+            ((HashSet<string>)typeof(FormMain).GetField("_knownFiles", flags).GetValue(main)).Add(foreign);
+            typeof(FormMain).GetMethod("SaveRedisSettings", flags).Invoke(main, null);
+            Check(File.ReadAllText(foreign) == original, "A file that owns no connection was rewritten");
+        }
+        finally { Directory.Delete(dir, true); }
     }
     // Runtime messages resolve through Resources, so the satellite assembly must carry every key the
     // neutral one has, and a translated value must keep the same format placeholders as its source.
@@ -606,9 +627,20 @@ public class RecordingDatabase : DispatchProxy
         if (method.Name == "Execute") { if ((string)args[0] == "RESTORE") Writes++; return RedisResult.Create((RedisValue)5); }
         if (method.Name == "ScriptEvaluate" || method.Name == "ScriptEvaluateAsync")
         {
-            Writes++;
+            string script = (string)args[0];
+            // The restore script returns 0 without touching anything when the key already exists,
+            // so an import can never clobber a concurrent write.
+            if (script.Contains("redis.call('RESTORE'"))
+            {
+                UsedKeyRestore = true;
+                if (Exists) return method.Name == "ScriptEvaluateAsync" ? Task.FromResult(RedisResult.Create((RedisValue)0)) : (object)RedisResult.Create((RedisValue)0);
+                Writes++;
+                return method.Name == "ScriptEvaluateAsync" ? Task.FromResult(RedisResult.Create((RedisValue)1)) : (object)RedisResult.Create((RedisValue)1);
+            }
+
             UsedKeyRestore = false;
-            if (((string)args[0]).Contains("redis.call('GET'")) StringValue = ((RedisValue[])args[2])[1];
+            Writes++;
+            if (script.Contains("redis.call('GET'")) StringValue = ((RedisValue[])args[2])[1];
             RedisResult result = RedisResult.Create((RedisValue)1);
             return method.Name == "ScriptEvaluateAsync" ? Task.FromResult(result) : (object)result;
         }

@@ -1064,11 +1064,37 @@ namespace RedisGuiManager
         private void FormQueryWindow_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (is_querying) { is_stop_query = true; queryCancellation?.Cancel(); e.Cancel = true; return; }
-            string sql = $"DROP TABLE IF EXISTS {table_name};";
-            SQLiteCommand command = new SQLiteCommand(sql, sqlite_con);
-            int result = command.ExecuteNonQuery();
-
             is_stop_query = true;
+        }
+
+        /// <summary>
+        /// Releases the in-memory SQLite snapshot. The designer Dispose calls this: components alone
+        /// would leak a full copy of the keyspace on every open.
+        /// </summary>
+        private void ReleaseSnapshot()
+        {
+            is_stop_query = true;
+            try { queryCancellation?.Cancel(); } catch { }
+            try { queryCancellation?.Dispose(); } catch { }
+            queryCancellation = null;
+
+            try
+            {
+                if (sqlite_con != null)
+                {
+                    using (SQLiteCommand command = new SQLiteCommand($"DROP TABLE IF EXISTS {table_name};", sqlite_con))
+                    {
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (SQLiteException)
+            {
+            }
+
+            try { sqlite_con?.Close(); } catch { }
+            try { sqlite_con?.Dispose(); } catch { }
+            sqlite_con = null;
         }
 
         private async void richTextBox_query_KeyUp(object sender, KeyEventArgs e)
@@ -1118,10 +1144,13 @@ namespace RedisGuiManager
                 {
                     if (dataGridView_query_result.Columns[cell.ColumnIndex].Name == "a_key")
                     {
-                        int a_db = int.Parse(dataGridView_query_result.Rows[cell.RowIndex].Cells["a_db"].Value.ToString());
+                        // A_db comes from the result set, so a null or non-numeric cell must not
+                        // throw out of the context-menu handler.
+                        string raw_db = dataGridView_query_result.Rows[cell.RowIndex].Cells["a_db"].Value?.ToString();
+                        if (int.TryParse(raw_db, out int a_db) == false) continue;
                         IDatabase redis = redis_client.GetDB(a_db);
                         if (redis == null) continue;
-                        targets.Add((redis, cell.Value.ToString()));
+                        targets.Add((redis, cell.Value?.ToString() ?? ""));
                     }
                 }
             }

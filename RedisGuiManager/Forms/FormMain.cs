@@ -22,12 +22,21 @@ namespace RedisGuiManager
         private List<RedisSettings> redis_settings = new List<RedisSettings>();
         private UserControl userControl = null;
         private bool is_shown = false;
+        /// <summary>Guards the batch delete / migrate engine against concurrent runs.</summary>
+        private bool batchRunning;
+        /// <summary>Set once FormClosing starts, so background loads stop touching controls.</summary>
+        private volatile bool shuttingDown;
         private const string ConnectionsDir = "connections";
         private const string DefaultConnectionsFile = "connections/connections.json";
         private Dictionary<RedisSettings, string> _settingFileMap = new Dictionary<RedisSettings, string>();
         private Dictionary<RedisGroup, string> _groupFileMap = new Dictionary<RedisGroup, string>();
         private HashSet<string> _knownFiles = new HashSet<string>();
         private HashSet<string> _failedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Connection files that actually contributed an entry. Only these may be rewritten on save:
+        /// the connections directory is user-visible and may hold backups or notes as well.
+        /// </summary>
+        private HashSet<string> _ownedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Application.DoEvents() runs a nested message loop and is therefore re-entrant: it can
         // dispatch another selection change (or a tree edit) while the first one is still loading,
@@ -192,7 +201,33 @@ namespace RedisGuiManager
 
             Config.Save();
 
+            // Background loads resume on the UI thread; stop them from touching controls that are
+            // about to be torn down.
+            shuttingDown = true;
+            CloseChildWindows();
             ClearAll();
+        }
+
+        private void CloseChildWindows()
+        {
+            var open = new List<Form>();
+            foreach (Form form in Application.OpenForms)
+            {
+                if (form != this && form.IsDisposed == false) open.Add(form);
+            }
+
+            foreach (Form form in open)
+            {
+                try
+                {
+                    form.Close();
+                    form.Dispose();
+                }
+                catch
+                {
+                    // A child that refuses to close must not block shutdown.
+                }
+            }
         }
 
         private bool CanWriteSelected()
@@ -266,7 +301,7 @@ namespace RedisGuiManager
             settings.Keys.Add(newName);
             node.Text = newName;
             CreateRedisShowTagControl<StartControl>();
-            treeView_server_AfterSelect(treeView_server, new TreeViewEventArgs(node));
+            RunGuardedAsync(() => SelectNodeAsync(node));
         }
 
         public void delete_key_operate(TreeNode select, IDatabase database)
@@ -317,5 +352,8 @@ namespace RedisGuiManager
         }
 
         private const int ExportValueLimit = 500;
+        /// <summary>Guards the import path against a file no export could have produced.</summary>
+        private const long MaxImportBytes = 512L * 1024 * 1024;
+        private const int MaxImportEntries = 500_000;
     }
 }

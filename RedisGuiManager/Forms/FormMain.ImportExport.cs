@@ -263,6 +263,12 @@ namespace RedisGuiManager
                     return false;
                 }
 
+                if (new FileInfo(path).Length > MaxImportBytes)
+                {
+                    problem = $"The file is larger than the {MaxImportBytes / (1024 * 1024)} MB import limit.";
+                    return false;
+                }
+
                 using var reader = new JsonTextReader(new StreamReader(path))
                 {
                     // Keep strings as strings so entry values are not coerced to DateTime.
@@ -288,7 +294,17 @@ namespace RedisGuiManager
                 while (reader.Read())
                 {
                     if (reader.TokenType == JsonToken.EndArray) { closed = true; break; }
-                    if (reader.TokenType == JsonToken.StartObject) entryCount++;
+                    if (reader.TokenType == JsonToken.StartObject)
+                    {
+                        entryCount++;
+                        // Export caps a single file at 500 entries; refuse anything that could only
+                        // have come from a runaway generator instead of loading it key by key.
+                        if (entryCount > MaxImportEntries)
+                        {
+                            problem = $"The file holds more than the {MaxImportEntries:N0} entry import limit.";
+                            return false;
+                        }
+                    }
                 }
 
                 if (closed == false)
@@ -356,9 +372,18 @@ namespace RedisGuiManager
 
                 var restoreKey = entry.TryGetValue("keyBytes", out var encodedKey)
                     ? (StackExchange.Redis.RedisKey)Convert.FromBase64String(encodedKey.ToString()) : (StackExchange.Redis.RedisKey)key;
-                if (database.KeyExists(restoreKey)) return false;
-                database.KeyRestore(restoreKey, payload, ttl < 0 ? null : TimeSpan.FromMilliseconds(ttl));
-                return true;
+                // RESTORE overwrites unconditionally, so EXISTS + RESTORE as two round trips would
+                // clobber a key written in between. The Lua script keeps the check and the restore
+                // in one atomic step, exactly like the value branch below.
+                const string restoreScript = @"
+if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+redis.call('RESTORE', KEYS[1], ARGV[1], ARGV[2])
+return 1";
+                StackExchange.Redis.RedisValue restoreTtl = ttl < 0 ? (StackExchange.Redis.RedisValue)"0" : (StackExchange.Redis.RedisValue)(long)ttl;
+                RedisResult restored = database.ScriptEvaluate(restoreScript,
+                    new StackExchange.Redis.RedisKey[] { restoreKey },
+                    new StackExchange.Redis.RedisValue[] { payload, restoreTtl });
+                return (long)restored == 1;
             }
 
             if (!entry.TryGetValue("value", out var rawValue) || rawValue == null)

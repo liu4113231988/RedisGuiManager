@@ -73,7 +73,9 @@ namespace RedisGuiManager
             {
                 var progress = new Progress<string>(message =>
                 {
-                    if (!dialog.IsDisposed) dialog.status.Text = message;
+                    // IsDisposed stays false after the user closes the window with X, so check the
+                    // handle instead: writing to a destroyed control would throw.
+                    if (!dialog.IsDisposed && dialog.IsHandleCreated) dialog.status.Text = message;
                 });
 
                 if (showProgressWindow)

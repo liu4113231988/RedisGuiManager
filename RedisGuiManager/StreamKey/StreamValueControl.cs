@@ -141,7 +141,7 @@ namespace RedisGuiManager
             var page = await Task.Run(() => client.StreamPageAfter(db, key, afterId, PageNavigator.PageSize));
 
             // The user may have switched keys while the request was in flight.
-            if (key != stringKeyName) return;
+            if (IsDisposed || Disposing || key != stringKeyName) return;
 
             // Remember the boundary so the next page resumes here instead of re-reading the stream.
             streamCursors.Set(pageIndex + 1, page.Entries.Count > 0 ? page.Entries[page.Entries.Count - 1].Id : afterId);

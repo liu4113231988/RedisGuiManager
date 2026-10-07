@@ -14,6 +14,13 @@ namespace RedisGuiManager
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
+            // The in-memory snapshot is released here; components alone would leak a full copy of
+            // the keyspace on every open.
+            if (disposing)
+            {
+                ReleaseSnapshot();
+            }
+
             if (disposing && (components != null))
             {
                 components.Dispose();

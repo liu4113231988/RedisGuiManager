@@ -96,7 +96,7 @@ namespace RedisGuiManager
         private void remove_keys_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
             if (!CanWriteSelected()) return;
-            PromptBatchDelete(false);
+            RunGuardedAsync(() => PromptBatchDeleteAsync(false));
         }
 
         private void queryWindowToolStripMenuItem_Click(object sender, EventArgs e)

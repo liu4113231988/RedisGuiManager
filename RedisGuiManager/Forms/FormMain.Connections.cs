@@ -134,6 +134,7 @@ namespace RedisGuiManager
                                 if (group.connections == null) group.connections = new List<RedisSettings>();
                                 redis_group.Add(group);
                                 _groupFileMap[group] = fullPath;
+                                _ownedFiles.Add(fullPath);
                             }
                             else
                             {
@@ -147,6 +148,7 @@ namespace RedisGuiManager
                                 }
                                 redis_settings.Add(setting);
                                 _settingFileMap[setting] = fullPath;
+                                _ownedFiles.Add(fullPath);
                             }
                         }
                     }
@@ -183,6 +185,7 @@ namespace RedisGuiManager
 
                 // ensure default file is known for new adds
                 _knownFiles.Add(Path.GetFullPath(GetDefaultConnectionsFile()));
+                _ownedFiles.Add(Path.GetFullPath(GetDefaultConnectionsFile()));
             }
             catch (Exception ex)
             {
@@ -434,13 +437,16 @@ namespace RedisGuiManager
                 var fileMap = new Dictionary<string, JArray>(StringComparer.OrdinalIgnoreCase);
 
                 // ensure known files are considered
-                foreach (var f in _knownFiles)
+                // Only files that contributed an entry may be rewritten. Anything else in the
+                // connections directory belongs to the user, and blanking it to [] would destroy
+                // backups, notes or hand-maintained fragments.
+                foreach (var f in _ownedFiles)
                 {
                     if (!_failedFiles.Contains(f) && !fileMap.ContainsKey(f))
                         fileMap[f] = new JArray();
                 }
 
-                if (!fileMap.ContainsKey(defaultFull))
+                if (!fileMap.ContainsKey(defaultFull) && !_failedFiles.Contains(defaultFull))
                     fileMap[defaultFull] = new JArray();
 
                 foreach (var group in redis_group)
@@ -461,6 +467,8 @@ namespace RedisGuiManager
                     }
                     if (!_knownFiles.Contains(target))
                         _knownFiles.Add(target);
+                    if (!_ownedFiles.Contains(target))
+                        _ownedFiles.Add(target);
                 }
 
                 foreach (var setting in redis_settings)
@@ -560,6 +568,7 @@ namespace RedisGuiManager
                 if (_failedFiles.Contains(defaultFull)) defaultFull = Path.Combine(GetConnectionsDir(), "connections.recovered.json");
                 _settingFileMap[form.Settings] = defaultFull;
                 _knownFiles.Add(defaultFull);
+                _ownedFiles.Add(defaultFull);
                 SaveRedisSettings();
 
                 TreeNode node = new TreeNode(form.Settings.name);

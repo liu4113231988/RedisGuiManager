@@ -80,7 +80,7 @@ namespace RedisGuiManager
         private async Task RefreshKeyAsync()
         {
             if (!valueControl.ConfirmDiscard()) return;
-            if (redisClient == null)
+            if (redisClient == null || database == null)
             {
                 MessageBox.Show(UiText.RedisConnectionError);
                 return;
@@ -93,7 +93,7 @@ namespace RedisGuiManager
             var key = stringKeyName;
             var batch = await db.ListRangeAsync(key, offset, offset + PageNavigator.PageSize);
 
-            if (key != stringKeyName) return;
+            if (IsDisposed || Disposing || key != stringKeyName) return;
 
             pages.UpdatePage(batch.Length > PageNavigator.PageSize);
             var read = batch.Take(PageNavigator.PageSize).ToArray();

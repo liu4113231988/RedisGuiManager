@@ -176,7 +176,9 @@ namespace RedisGuiManager
 
                     if (Tunnel.IsStarted == false)
                     {
-                        return new OperateResult(false, "\r\nTunnel not started");
+                        string message = "\r\nTunnel not started";
+                        Close();
+                        return new OperateResult(false, message);
                     }
 
                     temp_config = BuildConfiguration(ip_address, port, true, 60000);
@@ -246,24 +248,46 @@ namespace RedisGuiManager
 
         public void Close()
         {
-            ConnectionStatusChanged?.Invoke("Disconnected");
-            if (connection != null)
+            // Report through the guarded helper first: a throwing subscriber must not prevent the
+            // multiplexer and the SSH session from being released.
+            ReportStatus("Disconnected");
+
+            try
             {
-                connection.Dispose();
+                connection?.Dispose();
+            }
+            catch
+            {
+            }
+            finally
+            {
                 connection = null;
                 Redis = null;
                 RedisServer = null;
             }
 
-            if (Tunnel != null && Tunnel.IsStarted)
+            try
             {
-                Tunnel.Dispose();
+                // A tunnel that failed to start still owns its native handle.
+                Tunnel?.Dispose();
+            }
+            catch
+            {
+            }
+            finally
+            {
                 Tunnel = null;
             }
 
-            if (TunnelSsh != null)
+            try
             {
-                TunnelSsh.Dispose();
+                TunnelSsh?.Dispose();
+            }
+            catch
+            {
+            }
+            finally
+            {
                 TunnelSsh = null;
             }
         }

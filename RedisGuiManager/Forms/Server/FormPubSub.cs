@@ -101,10 +101,19 @@ namespace RedisGuiManager
                 var queue = subscriber.Subscribe(redisChannel);
                 queue.OnMessage(msg =>
                 {
-                    this.BeginInvoke((Action)(() =>
+                    // The subscriber calls this on a Redis thread: once the window is closing the
+                    // handle is gone and BeginInvoke itself would throw.
+                    if (IsDisposed || Disposing || IsHandleCreated == false) return;
+                    try
                     {
-                        AppendMessage(msg.Channel.ToString(), msg.Message.ToString());
-                    }));
+                        this.BeginInvoke((Action)(() => AppendMessage(msg.Channel.ToString(), msg.Message.ToString())));
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+                    catch (InvalidOperationException)
+                    {
+                    }
                 });
 
                 subscriptions[channel] = queue;
@@ -203,17 +212,27 @@ namespace RedisGuiManager
 
                 queue.OnMessage(msg =>
                 {
-                    this.BeginInvoke((Action)(() =>
+                    if (IsDisposed || Disposing || IsHandleCreated == false) return;
+                    try
                     {
-                        // Messages look like: "__keyspace@0__:mykey" -> "expired"
-                        string payload = msg.Message.ToString();
-                        string source = msg.Channel.ToString();
-                        int separator = source.IndexOf("__:");
-                        string key = separator >= 0 && source.Length > separator + 3
-                            ? source.Substring(separator + 3)
-                            : source;
-                        AppendMessage($"{key}  (db{ExtractDatabase(source)})", payload);
-                    }));
+                        this.BeginInvoke((Action)(() =>
+                        {
+                            // Messages look like: "__keyspace@0__:mykey" -> "expired"
+                            string payload = msg.Message.ToString();
+                            string source = msg.Channel.ToString();
+                            int separator = source.IndexOf("__:");
+                            string key = separator >= 0 && source.Length > separator + 3
+                                ? source.Substring(separator + 3)
+                                : source;
+                            AppendMessage($"{key}  (db{ExtractDatabase(source)})", payload);
+                        }));
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+                    catch (InvalidOperationException)
+                    {
+                    }
                 });
 
                 keyspaceSubscription = queue;
@@ -301,6 +320,8 @@ namespace RedisGuiManager
         {
             foreach (var kv in subscriptions)
             {
+                // Unsubscribe is the only teardown ChannelMessageQueue offers; the multiplexer
+                // itself is closed separately when the connection is dropped.
                 try { kv.Value.Unsubscribe(); } catch { }
             }
             subscriptions.Clear();

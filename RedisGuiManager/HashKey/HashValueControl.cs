@@ -85,7 +85,7 @@ namespace RedisGuiManager
         private async Task RefreshKeyAsync()
         {
             if (!valueControl.ConfirmDiscard()) return;
-            if (redisClient == null)
+            if (redisClient == null || database == null)
             {
                 MessageBox.Show(UiText.RedisConnectionError);
                 return;
@@ -105,7 +105,7 @@ namespace RedisGuiManager
             var page = await Task.Run(() => client.HashScanPage(key, cursor, PageNavigator.PageSize));
 
             // The user may have switched keys or pages while the request was in flight.
-            if (key != stringKeyName) return;
+            if (IsDisposed || Disposing || key != stringKeyName) return;
 
             bool more = page.NextCursor != "0";
             hashCursors.Set(pageIndex + 1, page.NextCursor);

@@ -23,6 +23,12 @@ namespace RedisGuiManager
         /// </summary>
         public event Func<Task> PageChanged;
 
+        /// <summary>
+        /// Raised when <see cref="PageChanged"/> throws. The navigator has already rolled its offset
+        /// back, so the owner only has to surface the failure.
+        /// </summary>
+        public event Action<Exception> LoadFailed;
+
         public Func<bool> CanNavigate { get; set; }
 
         public PageNavigator()
@@ -61,10 +67,13 @@ namespace RedisGuiManager
                     await PageChanged();
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                // The click handlers are async void, so rethrowing here would end up on
+                // Application.ThreadException and take the process down. Report instead.
                 Offset = old;
-                throw;
+                LoadFailed?.Invoke(ex);
+                return false;
             }
             finally
             {

@@ -259,25 +259,28 @@ namespace RedisGuiManager
         private void remove_keys_from_registered_dbs_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
             if (!CanWriteSelected()) return;
-            PromptBatchDelete(false);
+            RunGuardedAsync(() => PromptBatchDeleteAsync(false));
         }
 
         private void remove_keys_from_whole_dbs_ToolStripMenuItem_Click(object sender, EventArgs e)
 		{
             if (!CanWriteSelected()) return;
-            PromptBatchDelete(true);
+            RunGuardedAsync(() => PromptBatchDeleteAsync(true));
         }
 
-        private async void PromptBatchDelete(bool allDatabases)
+        private async Task PromptBatchDeleteAsync(bool allDatabases)
         {
             var selected = treeView_server.SelectedNode;
-            var client = (RedisClient)GetRedisNode(selected).Tag;
+            if (GetRedisNode(selected)?.Tag is RedisClient client == false) return;
+            if (client.Redis == null) { MessageBox.Show(this, UiText.RedisConnectionError); return; }
             using var input = new FormInputString { TextInfo = "Delete keys matching pattern", InputValue = "" };
             if (input.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(input.InputValue)) return;
-            var databases = selected.Tag is DbSettings db && !allDatabases
-                ? new[] { db.DBNumber }
-                : allDatabases ? Enumerable.Range(0, client.Settings.use_cluster ? 1 : client.RedisServer.DatabaseCount).ToArray()
-                : selected.Nodes.Cast<TreeNode>().Where(n => n.Tag is DbSettings).Select(n => ((DbSettings)n.Tag).DBNumber).ToArray();
+            int[] databases = allDatabases
+                ? Enumerable.Range(0, client.Settings.use_cluster ? 1 : client.RedisServer?.DatabaseCount ?? 0).ToArray()
+                : selected.Tag is DbSettings db
+                    ? new[] { db.DBNumber }
+                    : selected.Nodes.Cast<TreeNode>().Where(n => n.Tag is DbSettings).Select(n => ((DbSettings)n.Tag).DBNumber).ToArray();
+            if (databases.Length == 0) return;
             await RunBatchAsync(client, databases, input.InputValue, "Delete keys", "", (database, key) => database.KeyDelete(key));
             if (selected.Tag is DbSettings) await RefreshDbKeysAsync(selected, true);
         }
@@ -285,7 +288,11 @@ namespace RedisGuiManager
         private async Task RunBatchAsync(RedisClient client, int[] databases, string pattern, string title, string destination, Func<IDatabase, StackExchange.Redis.RedisKey, bool> execute)
         {
             if (!client.CanWrite()) return;
-            string manifest = Path.GetTempFileName();
+            // One batch at a time: two concurrent dialogs would delete from the same client while
+            // each holds its own manifest.
+            if (batchRunning) return;
+            batchRunning = true;
+            string manifest = Path.Combine(Path.GetTempPath(), "redisgui-batch-" + Guid.NewGuid().ToString("N") + ".jsonl");
             try
             {
                 var previewOutcome = await OperationDialog.RunAsync(this, "Preview " + title, (token, progress) =>
@@ -320,7 +327,9 @@ namespace RedisGuiManager
                         var item = JArray.Parse(line);
                         int db = item[0].Value<int>();
                         var key = (StackExchange.Redis.RedisKey)Convert.FromBase64String(item[1].Value<string>());
-                        try { if (execute(client.GetDB(db), key)) report.Success++; else report.Skipped++; }
+                        var database = client.GetDB(db);
+                        if (database == null) { report.Errors.Add($"DB {db} / {key}: not connected"); continue; }
+                        try { if (execute(database, key)) report.Success++; else report.Skipped++; }
                         catch (RedisException ex) { report.Errors.Add($"DB {db} / {key}: {ex.Message}"); }
                         if ((report.Success + report.Skipped + report.Errors.Count) % 100 == 0) progress.Report($"Processed {report.Success + report.Skipped + report.Errors.Count} / {preview.Count}");
                     }
@@ -330,7 +339,13 @@ namespace RedisGuiManager
 
                 resultOutcome.Value.Show(this, title + " result");
             }
-            finally { File.Delete(manifest); }
+            finally
+            {
+                batchRunning = false;
+                // The manifest lists every matched key in clear text; make sure it never survives a
+                // failure of the delete itself.
+                try { if (File.Exists(manifest)) File.Delete(manifest); } catch { }
+            }
         }
 
         private async void remove_db_ToolStripMenuItem_Click(object sender, EventArgs e)

@@ -1063,7 +1063,7 @@ namespace RedisGuiManager
 			if (zPen != null)
 				zPen.Dispose();
 			if (zBrush != null)
-				zPen.Dispose();
+				zBrush.Dispose();
 			if (zRegion != null)
 				zRegion.Dispose();
 			if (zGP_GridLines != null)
