@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using RedisGuiManager;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using StackExchange.Redis;
 
@@ -83,15 +84,75 @@ static class RegressionChecks
             try { page.Read(Enumerable.Range(0, 100), new CancellationToken(true)); }
             catch (OperationCanceledException) { canceled = true; }
             Check(canceled, "Page cancellation ignored");
-            typeof(PageNavigator).GetMethod("Navigate", flags).Invoke(page, new object[] { 500 });
+
+            var navigate = typeof(PageNavigator).GetMethod("NavigateAsync",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            // No handler yet: the offset must roll back because nothing committed the page.
+            navigate.Invoke(page, new object[] { 500 });
             Check(page.Offset == 0, "Failed/canceled navigation changed page");
-            page.PageChanged += () => page.UpdatePage(true);
-            typeof(PageNavigator).GetMethod("Navigate", flags).Invoke(page, new object[] { 500 });
+
+            Func<Task> commitNow = () => { page.UpdatePage(true); return Task.CompletedTask; };
+            page.PageChanged += commitNow;
+            ((Task)navigate.Invoke(page, new object[] { 500 })).GetAwaiter().GetResult();
+            Check(page.Offset == 500, "Committed navigation did not advance the offset");
             Check(page.Read(Enumerable.Range(0, 2000), CancellationToken.None)[0] == 500, "Next page has wrong offset");
+
             page.CanNavigate = () => false;
-            typeof(PageNavigator).GetMethod("Navigate", flags).Invoke(page, new object[] { 1000 });
+            ((Task)navigate.Invoke(page, new object[] { 1000 })).GetAwaiter().GetResult();
             Check(page.Offset == 500, "Unsaved-edit veto ignored during paging");
+
+            // Swap in a handler that commits late; the navigator must await it before the offset sticks.
+            page.CanNavigate = null;
+            page.PageChanged -= commitNow;
+            var gate = new TaskCompletionSource<bool>();
+            page.PageChanged += async () => { await gate.Task; page.UpdatePage(true); };
+            var pending = (Task)navigate.Invoke(page, new object[] { 1000 });
+            Check(!pending.IsCompleted, "NavigateAsync did not await the async page handler");
+            // A second navigation while one is in flight must be ignored, not interleaved.
+            ((Task)navigate.Invoke(page, new object[] { 1500 })).GetAwaiter().GetResult();
+            gate.SetResult(true);
+            pending.GetAwaiter().GetResult();
+            Check(page.Offset == 1000, "Re-entrant navigation interleaved two page loads");
         }
+
+        // Cursor retention: deep paging must reuse server-side cursors instead of replaying.
+        var cursors = new CursorStack<string>();
+        cursors.Reset("0");
+        Check(cursors.HasCursor(0) && cursors.Get(0) == "0", "Cursor stack did not seed page 0");
+        Check(!cursors.HasCursor(1), "Cursor stack invented a cursor for an unvisited page");
+        cursors.Set(1, "42");
+        Check(cursors.Get(1) == "42", "Cursor stack lost a recorded cursor");
+        Check(cursors.Get(0) == "0", "Reading page 1 disturbed the page 0 cursor");
+        bool threw = false;
+        try { cursors.Get(5); } catch (ArgumentOutOfRangeException) { threw = true; }
+        Check(threw, "Cursor stack returned a cursor for a page it never visited");
+        // Walking forward then trimming must forget the future but keep the visited prefix.
+        cursors.Set(2, "99");
+        cursors.TrimTo(2);
+        Check(cursors.Get(1) == "42" && !cursors.HasCursor(2), "TrimTo discarded the visited prefix");
+        cursors.Reset("7");
+        Check(cursors.Get(0) == "7" && cursors.Count == 1, "Reset did not clear retained cursors");
+        // Going backwards after Reset must not resurrect stale cursors.
+        Check(!cursors.HasCursor(1), "Reset left stale cursors behind");
+
+        // Read-only console gate: must refuse anything that can mutate, hijack the connection,
+        // or execute writes server-side, while still allowing the common inspection commands.
+        string[] allowed = { "GET", "get key", "HKEYS h", "ZRANGEBYSCORE z 0 1", "SMISMEMBER s m",
+            "XRANGE s - +", "SCAN 0", "INFO", "DBSIZE", "CONFIG GET maxmemory", "CLIENT LIST",
+            "XINFO STREAM s", "OBJECT ENCODING k", "MEMORY USAGE k", "COMMAND DOCS" };
+        string[] denied = { "SET k v", "DEL k", "HSET h f v", "FLUSHALL", "EVAL \"return 1\" 0",
+            "SCRIPT LOAD x", "SUBSCRIBE ch", "PSUBSCRIBE ch*", "MONITOR", "CONFIG SET maxmemory 1",
+            "CLIENT KILL ID 1", "SORT k", "RESTORE k 0 p d", "MIGRATE h 1", "GEORADIUS g 0 0 1 km STORE d",
+            "XREADGROUP GROUP g c COUNT 1 STREAMS s >", "XACK s g 1-1", "FLUSHDB", "SHUTDOWN" };
+        foreach (string cmd in allowed)
+        {
+            Check(Utils.IsReadOnlyCommandAllowed(cmd), $"Read-only mode blocked a safe command: {cmd}");
+        }
+        foreach (string cmd in denied)
+        {
+            Check(!Utils.IsReadOnlyCommandAllowed(cmd), $"Read-only mode allowed a write/blocking command: {cmd}");
+        }
+
         var database = DispatchProxy.Create<IDatabase, RecordingDatabase>();
         var recording = (RecordingDatabase)(object)database;
         recording.StreamEntries = Enumerable.Range(1, 1200).Select(i => new StreamEntry($"{i}-0", Array.Empty<NameValueEntry>())).ToArray();
@@ -114,10 +175,18 @@ static class RegressionChecks
         var boundClient = new RedisClient(new RedisSettings { host = "127.0.0.1", port = 6379 }) { Redis = firstDb };
         using (var editor = new StringValueControl())
         {
-            editor.SetNewKey(boundClient, "bound-key");
+            editor.SetNewKey(boundClient, "bound-key").GetAwaiter().GetResult();
             boundClient.Redis = secondDb;
             ((TextBoxBase)editor.Controls.Find("textBox_value", true)[0]).Text = "edited";
             typeof(StringValueControl).GetMethod("button_save_Click", flags).Invoke(editor, new object[] { null, EventArgs.Empty });
+
+            // button_save_Click is an async void handler, so give the save a moment to land.
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (((RecordingDatabase)(object)firstDb).Writes == 0 && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(10);
+            }
+
             Check(((RecordingDatabase)(object)firstDb).Writes == 1 && ((RecordingDatabase)(object)secondDb).Writes == 0, "Editor saved into a different selected database");
         }
         using (var form = new FormRedisAdd(settings))
@@ -270,12 +339,14 @@ public class RecordingDatabase : DispatchProxy
             return StreamEntries.Where(e => long.Parse(e.Id.ToString().Split('-')[0]) >= first).Take(Convert.ToInt32(args[3])).ToArray();
         }
         if (method.Name == "StringGet") return StringValue;
+        if (method.Name == "StringGetAsync") return Task.FromResult(StringValue);
         if (method.Name == "Execute") { if ((string)args[0] == "RESTORE") Writes++; return RedisResult.Create((RedisValue)5); }
-        if (method.Name == "ScriptEvaluate")
+        if (method.Name == "ScriptEvaluate" || method.Name == "ScriptEvaluateAsync")
         {
             Writes++;
             if (((string)args[0]).Contains("redis.call('GET'")) StringValue = ((RedisValue[])args[2])[1];
-            return RedisResult.Create((RedisValue)1);
+            RedisResult result = RedisResult.Create((RedisValue)1);
+            return method.Name == "ScriptEvaluateAsync" ? Task.FromResult(result) : (object)result;
         }
         throw new NotSupportedException(method.Name);
     }

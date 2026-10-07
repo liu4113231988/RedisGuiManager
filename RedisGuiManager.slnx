@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="AutocompleteMenu/AutocompleteMenu.csproj" />
   <Project Path="RedisGuiManager/RedisGuiManager.csproj" />
+  <Project Path="checks/RegressionChecks.csproj" />
+  <Project Path="tests/RedisGuiManager.Tests.csproj" />
 </Solution>
