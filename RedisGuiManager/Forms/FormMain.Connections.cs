@@ -313,7 +313,7 @@ namespace RedisGuiManager
 
             if (select.Tag is RedisClient client)
             {
-                using (FormRedisAdd form = new FormRedisAdd(client.Settings))
+                using (FormRedisAdd form = new FormRedisAdd(client.Settings, name => IsConnectionNameTaken(name, client.Settings)))
                 {
                     if (form.ShowDialog() == DialogResult.OK)
                     {
@@ -324,6 +324,8 @@ namespace RedisGuiManager
                         }
 
                         client.Settings = form.Settings;
+                        // The name may have changed; keep the tree node in step.
+                        select.Text = client.Settings.name;
 
                         SaveRedisSettings();
 
@@ -550,23 +552,27 @@ namespace RedisGuiManager
             }
         }
 
+        /// <summary>
+        /// True when a connection other than <paramref name="except"/> already uses
+        /// <paramref name="name"/>; keeps tree nodes unambiguous on both add and edit.
+        /// </summary>
+        private bool IsConnectionNameTaken(string name, RedisSettings except)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+
+            return redis_settings
+                .Concat(redis_group.Where(g => g.connections != null).SelectMany(g => g.connections))
+                .Any(s => s != null && !ReferenceEquals(s, except)
+                    && string.Equals(s.name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
         private void button_add_server_Click(object sender, EventArgs e)
         {
-            using (FormRedisAdd form = new FormRedisAdd(null))
+            // The form owns the uniqueness rule so add and edit cannot drift apart.
+            using (FormRedisAdd form = new FormRedisAdd(null, name => IsConnectionNameTaken(name, null)))
             {
                 if (form.ShowDialog() != DialogResult.OK)
                 {
-                    return;
-                }
-
-                // 名称重复校验：避免树节点歧义（与现有独立连接及分组内连接比较）
-                string newName = form.Settings.name?.Trim();
-                bool dup = redis_settings.Any(s => string.Equals(s.name?.Trim(), newName, StringComparison.OrdinalIgnoreCase))
-                    || redis_group.Any(g => g.connections != null && g.connections.Any(s => string.Equals(s.name?.Trim(), newName, StringComparison.OrdinalIgnoreCase)));
-                if (dup)
-                {
-                    MessageBox.Show(string.Format(UiText.DuplicateConnectionName, newName),
-                        UiText.DuplicateNameTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 

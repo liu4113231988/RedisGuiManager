@@ -118,7 +118,7 @@ namespace RedisGuiManager
 
                 subscriptions[channel] = queue;
 
-                listBox_channels.Items.Add(isPattern ? string.Format(UiText.PubSubPatternSuffix, channel) : channel);
+                listBox_channels.Items.Add(new SubscriptionListItem(channel, isPattern ? string.Format(UiText.PubSubPatternSuffix, channel) : channel));
                 textBox_channel.Clear();
                 label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count);
             }
@@ -130,27 +130,35 @@ namespace RedisGuiManager
 
         private void button_unsubscribe_Click(object sender, EventArgs e)
         {
-            if (listBox_channels.SelectedIndex < 0)
+            if (listBox_channels.SelectedIndex < 0 || listBox_channels.SelectedItem is not SubscriptionListItem item)
             {
                 MessageBox.Show(UiText.SelectChannelToUnsubscribe);
                 return;
             }
 
-            string channel = listBox_channels.SelectedItem.ToString();
-
-            if (subscriptions.TryGetValue(channel, out var queue))
+            try
             {
-                try
+                if (item.IsKeyspace)
+                {
+                    keyspaceSubscription?.Unsubscribe();
+                    keyspaceSubscription = null;
+                }
+                else if (subscriptions.TryGetValue(item.Channel, out var queue))
                 {
                     queue.Unsubscribe();
-                    subscriptions.Remove(channel);
-                    listBox_channels.Items.Remove(channel);
-                    label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count);
+                    subscriptions.Remove(item.Channel);
                 }
-                catch (Exception ex)
+                else
                 {
-                    MessageBox.Show(UiText.UnsubscribeFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
+
+                listBox_channels.Items.Remove(item);
+                label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count + (keyspaceSubscription != null ? 1 : 0));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(UiText.UnsubscribeFailed + ex.Message, UiText.ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -236,7 +244,7 @@ namespace RedisGuiManager
                 });
 
                 keyspaceSubscription = queue;
-                listBox_channels.Items.Add(UiText.PubSubKeyspaceChannelLabel);
+                listBox_channels.Items.Add(new SubscriptionListItem(null, UiText.PubSubKeyspaceChannelLabel, true));
                 label_sub_count.Text = string.Format(UiText.PubSubSubscriptionsFormat, subscriptions.Count + 1);
 
                 MessageBox.Show(this, UiText.PubSubKeyspaceInfo, UiText.PubSubKeyspaceTitle,
@@ -328,6 +336,27 @@ namespace RedisGuiManager
                 try { keyspaceSubscription.Unsubscribe(); } catch { }
                 keyspaceSubscription = null;
             }
+        }
+
+        /// <summary>
+        /// One entry in the channel list. A pattern channel is displayed with a "(pattern)" suffix
+        /// that is not part of the channel name, so the raw name is kept here rather than being
+        /// recovered from the display text when unsubscribing.
+        /// </summary>
+        private sealed class SubscriptionListItem
+        {
+            public SubscriptionListItem(string channel, string display, bool isKeyspace = false)
+            {
+                Channel = channel;
+                Display = display;
+                IsKeyspace = isKeyspace;
+            }
+
+            public string Channel { get; }
+            public string Display { get; }
+            public bool IsKeyspace { get; }
+
+            public override string ToString() => Display;
         }
     }
 }

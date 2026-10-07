@@ -13,6 +13,14 @@ namespace RedisGuiManager
 
         private bool copy_key_in_same_machine(IDatabase src_db, IDatabase dst_db, string src_key, string dst_key)
 		{
+            // A dropped connection nulls out the database handles, and the callers are async void, so
+            // a missing handle must be reported rather than dereferenced.
+            if (src_db == null || dst_db == null)
+            {
+                MessageBox.Show(UiText.RedisConnectionError, UiText.CopyFailed);
+                return false;
+            }
+
             if (src_key == "")
 			{
                 MessageBox.Show(UiText.SourceKeyEmpty, UiText.CopyFailed);
@@ -31,21 +39,25 @@ namespace RedisGuiManager
                 return false;
 			}
 
-            if (dst_db.KeyExists(dst_key))
-			{
-                MessageBox.Show(string.Format(UiText.DestinationKeyExists, dst_key), UiText.CopyFailed);
-                return false;
-			}
-
             try
             {
-            var snapshot = (RedisResult[])src_db.ScriptEvaluate(
-                "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Source key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
-                new StackExchange.Redis.RedisKey[] { src_key });
-            long ttl = (long)snapshot[1];
-            dst_db.KeyRestore(dst_key, (byte[])snapshot[0], ttl < 0 ? null : TimeSpan.FromMilliseconds(Math.Max(1, ttl)));
+                var snapshot = (RedisResult[])src_db.ScriptEvaluate(
+                    "local v=redis.call('DUMP',KEYS[1]); if not v then return redis.error_reply('Source key disappeared') end; return {v,redis.call('PTTL',KEYS[1])}",
+                    new StackExchange.Redis.RedisKey[] { src_key });
+                long ttl = (long)snapshot[1];
 
-            return true;
+                // RESTORE is issued without REPLACE on purpose: if the destination key appeared after
+                // the existence check above, the server rejects the write with BUSYKEY instead of
+                // silently overwriting the newer value.
+                dst_db.Execute("RESTORE", dst_key, ttl < 0 ? 0L : ttl, (byte[])snapshot[0]);
+
+                return true;
+            }
+            catch (RedisServerException ex) when (ex.Message.StartsWith("BUSYKEY", StringComparison.OrdinalIgnoreCase))
+            {
+                // The destination key appeared after the pre-check; report it the same way.
+                MessageBox.Show(string.Format(UiText.DestinationKeyExists, dst_key), UiText.CopyFailed);
+                return false;
             }
             catch (RedisException ex)
             {
@@ -176,7 +188,15 @@ namespace RedisGuiManager
 						var db = redisClient.GetDB(dbSettings.DBNumber);
 						string src_key = select.Text;
 
-                        IPEndPoint end_point = new IPEndPoint(IPAddress.Parse(formInput.Host), formInput.Port);
+                        // MIGRATE needs a literal endpoint, so a hostname must be rejected with a
+                        // message instead of letting IPAddress.Parse throw and kill the UI.
+                        if (IPAddress.TryParse(formInput.Host, out IPAddress targetAddress) == false)
+                        {
+                            MessageBox.Show(UiText.MigrationNeedsIpAddress);
+                            return;
+                        }
+
+                        IPEndPoint end_point = new IPEndPoint(targetAddress, formInput.Port);
 
                         try
                         {

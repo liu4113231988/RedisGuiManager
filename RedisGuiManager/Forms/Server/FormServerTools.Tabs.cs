@@ -80,6 +80,8 @@ namespace RedisGuiManager
                 ("Id", 70), ("Address", 150), ("Name", 110), ("DB", 45), ("Last command", 170),
                 ("Idle", 65), ("Age", 65), ("Subs", 55), ("Flags", 110), ("Library", 130));
             clientsGrid.Dock = DockStyle.Fill;
+            // "Kill selected" is meant to act on several clients at once.
+            clientsGrid.MultiSelect = true;
             page.Controls.Add(clientsGrid);
 
             return page;

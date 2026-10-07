@@ -18,6 +18,8 @@ namespace RedisGuiManager
     {
         private RedisSettings settings = null;
         private RedisSettings originalSettings;
+        /// <summary>Returns true when another connection already uses the given name.</summary>
+        private readonly Func<string, bool> nameTaken;
         private readonly TextBox usernameInput = new TextBox();
         private readonly CheckBox readOnlyInput = new CheckBox { Text = "Read-only connection", AutoSize = true };
         public RedisSettings Settings
@@ -25,9 +27,10 @@ namespace RedisGuiManager
             get { return settings; }
         }
 
-        public FormRedisAdd(RedisSettings redisSettings)
+        public FormRedisAdd(RedisSettings redisSettings, Func<string, bool> nameTaken = null)
         {
             InitializeComponent();
+            this.nameTaken = nameTaken;
             int y = button_finish.Top;
             MaximumSize = Size.Empty;
             MinimumSize = Size.Empty;
@@ -69,11 +72,6 @@ namespace RedisGuiManager
                 port = 6379,
                 auth = string.Empty
             } : JsonConvert.DeserializeObject<RedisSettings>(JsonConvert.SerializeObject(redisSettings));
-
-            if (redisSettings != null)
-            {
-                textBox_name.ReadOnly = true;
-            }
         }
 
         private void FormRedisAdd_Load(object sender, EventArgs e)
@@ -122,6 +120,14 @@ namespace RedisGuiManager
                 return false;
             }
 
+            if (nameTaken != null && nameTaken(textBox_name.Text.Trim()))
+            {
+                MessageBox.Show(string.Format(UiText.DuplicateConnectionName, textBox_name.Text.Trim()),
+                    UiText.DuplicateNameTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                return false;
+            }
+
             if (IPAddress.TryParse(textBox_ip.Text, out IPAddress address) == false)
             {
                 try
@@ -147,7 +153,10 @@ namespace RedisGuiManager
                 return false;
             }
 
-            if (int.TryParse(textBox_tunnel_port.Text, out int tunnel_port) == false || tunnel_port < 1 || tunnel_port > 65535)
+            // Only validate the tunnel port when a tunnel is actually configured; the field keeps its
+            // stale value (and is disabled) otherwise, and blocking a save on it would be surprising.
+            if (checkBox_use_tunnel.Checked
+                && (int.TryParse(textBox_tunnel_port.Text, out int tunnel_port) == false || tunnel_port < 1 || tunnel_port > 65535))
             {
                 MessageBox.Show(UiText.InvalidTunnelPort);
 

@@ -478,7 +478,7 @@ namespace RedisGuiManager
             treeView_field_names.Nodes.Add("a_value");
             treeView_field_names.Nodes.Add("a_score");
 
-            string sql = $"CREATE TABLE {table_name} (a_db INTEGER, a_key TEXT, a_index INTEGER, a_value TEXT, a_score INTEGER)";
+            string sql = $"CREATE TABLE {table_name} (a_db INTEGER, a_key TEXT, a_index INTEGER, a_value TEXT, a_score REAL)";
             SQLiteCommand command = new SQLiteCommand(sql, sqlite_con);
             int result = command.ExecuteNonQuery();
 
@@ -517,8 +517,9 @@ namespace RedisGuiManager
                             command.Parameters.AddWithValue("Db", i);
 							command.Parameters.AddWithValue("Key", key.ToString());
 							command.Parameters.AddWithValue("Index", index);
-                            command.Parameters.AddWithValue("Value", val.ToString());
-                            command.Parameters.AddWithValue("Score", Convert.ToInt64(val.Score));
+                            command.Parameters.AddWithValue("Value", val.Element.ToString());
+                            // Scores are doubles; converting to long truncated the fraction (3.7 -> 4).
+                            command.Parameters.AddWithValue("Score", val.Score);
 
                             command.ExecuteNonQuery();
                             ++index;
@@ -714,9 +715,13 @@ namespace RedisGuiManager
                 command = new SQLiteCommand(sql, sqlite_con);
 				command.Parameters.AddWithValue("Db", row.Key.Split(' ')[0]);
 				command.Parameters.AddWithValue("Key", row.Key.Substring(row.Key.IndexOf(' ') + 1));
+				// The value placeholders in the SQL above are @f_0, @f_1, ... so the bound
+				// parameters must use the same names. Binding by the field name instead (as the
+				// previous code did) leaves every @f_N unbound and makes the insert fail.
+				fieldIndex = 0;
 				foreach (var field_n_val in row.Value)
                 {
-                    command.Parameters.AddWithValue(field_n_val.Key, field_n_val.Value);
+                    command.Parameters.AddWithValue($"f_{fieldIndex++}", field_n_val.Value);
                 }
 
                 command.ExecuteNonQuery();
@@ -846,11 +851,57 @@ namespace RedisGuiManager
             });
         }
 
-        private Task<StackExchange.Redis.RedisKey[]> FetchKeys(int database)
+        private async Task<StackExchange.Redis.RedisKey[]> FetchKeys(int database)
         {
             string filter = textBox_keys_filter.Text;
             int limit = activeKeyLimit;
-            return ReadSnapshot(redis_client.ScanKeys(database, filter, Config.scan_page_count), limit);
+            var scanned = await ReadSnapshot(redis_client.ScanKeys(database, filter, Config.scan_page_count), limit);
+            if (scanned.Length == 0) return scanned;
+
+            var db = redis_client.GetDB(database);
+            if (db == null) return scanned;
+
+            // The type dropdown is meant to narrow the snapshot, so keys are filtered here by TYPE;
+            // only matching keys are read below instead of reading every key and discarding WRONGTYPE.
+            // The checks are pipelined, so this costs about one extra round trip rather than one per key.
+            try
+            {
+                var expected = SelectedRedisType();
+                var checks = new Task<StackExchange.Redis.RedisType>[scanned.Length];
+                for (int i = 0; i < scanned.Length; i++) checks[i] = db.KeyTypeAsync(scanned[i]);
+                await Task.WhenAll(checks);
+
+                var matched = new List<StackExchange.Redis.RedisKey>(scanned.Length);
+                for (int i = 0; i < scanned.Length; i++)
+                {
+                    if (checks[i].Status == TaskStatus.RanToCompletion && checks[i].Result == expected)
+                    {
+                        matched.Add(scanned[i]);
+                    }
+                }
+
+                return matched.ToArray();
+            }
+            catch (Exception)
+            {
+                // A failing filter must not break the query: the per-type reads still ignore WRONGTYPE,
+                // so the unfiltered keys keep the previous behaviour.
+                return scanned;
+            }
+        }
+
+        private StackExchange.Redis.RedisType SelectedRedisType()
+        {
+            switch ((RedisKeyType)comboBox_keys_type.SelectedIndex)
+            {
+                case RedisKeyType.String: return StackExchange.Redis.RedisType.String;
+                case RedisKeyType.List: return StackExchange.Redis.RedisType.List;
+                case RedisKeyType.Set: return StackExchange.Redis.RedisType.Set;
+                case RedisKeyType.Zset: return StackExchange.Redis.RedisType.SortedSet;
+                case RedisKeyType.Stream: return StackExchange.Redis.RedisType.Stream;
+                case RedisKeyType.Hash:
+                default: return StackExchange.Redis.RedisType.Hash;
+            }
         }
 
         // Reused across page renders so paging does not rebuild the table (schema + metadata) every time.

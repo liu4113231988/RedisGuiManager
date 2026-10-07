@@ -35,6 +35,8 @@ namespace RedisGuiManager
         private TextBox clusterInfo;
         private TextBox diagKey;
         private DataGridView diagGrid;
+        /// <summary>Database targeted by the key-based diagnostics (MEMORY USAGE, OBJECT).</summary>
+        private NumericUpDown dbNumber;
         private ComboBox sentinelCombo;
         private DataGridView sentinelGrid;
 
@@ -68,6 +70,15 @@ namespace RedisGuiManager
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 40 };
             var refreshAll = MakeButton("Refresh all", async (s, e) => await RefreshActiveTabAsync(), 110);
             refreshAll.Location = new Point(12, 7);
+
+            // MEMORY USAGE and OBJECT are key-based, so they must target the database the key
+            // lives in instead of always DB 0.
+            var dbLabel = MakeLabel("DB:", 26);
+            dbLabel.Location = new Point(134, 15);
+            dbNumber = new NumericUpDown { Minimum = 0, Maximum = 65535, Width = 70, Location = new Point(162, 9) };
+            bottom.Controls.Add(dbLabel);
+            bottom.Controls.Add(dbNumber);
+
             var close = MakeButton("Close", (s, e) => Close(), 90);
             close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             close.Location = new Point(bottom.Width - 102, 7);
@@ -101,6 +112,10 @@ namespace RedisGuiManager
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            if (dbNumber != null)
+            {
+                dbNumber.Value = Math.Max(dbNumber.Minimum, Math.Min(dbNumber.Maximum, redisClient.DBBlock));
+            }
             tabs.SelectedIndex = 0;
             _ = RefreshActiveTabAsync();
         }
@@ -235,7 +250,7 @@ namespace RedisGuiManager
 
             await RunAsync("MEMORY USAGE", async () =>
             {
-                var usage = await Task.Run(() => RedisOps.MemoryUsage(redisClient.GetDB(0), (StackExchange.Redis.RedisKey)key));
+                var usage = await Task.Run(() => RedisOps.MemoryUsage(redisClient.GetDB((int)dbNumber.Value), (StackExchange.Redis.RedisKey)key));
                 ReplaceGrid(memoryGrid, new[]
                 {
                     (object)("MEMORY USAGE " + key),
@@ -385,7 +400,7 @@ namespace RedisGuiManager
 
             await RunAsync("OBJECT", async () =>
             {
-                var database = redisClient.GetDB(0);
+                var database = redisClient.GetDB((int)dbNumber.Value);
                 var rows = new List<string>();
 
                 long? usage = await Task.Run(() => RedisOps.MemoryUsage(database, (StackExchange.Redis.RedisKey)key));

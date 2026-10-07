@@ -173,6 +173,12 @@ namespace RedisGuiManager
             keyOperateControl.SetRedisClient(redisClient, key);
             await RefreshKeyAsync();
 
+            // Reset derived state so a stale selection/value cannot leak into the new key, matching
+            // the Hash and List editors.
+            valueControl.SetValue(string.Empty);
+            selectRow = null;
+            dataGridView_set.ClearSelection();
+
             dataGridView_set.SelectionChanged += dataGridView_set_SelectionChanged;
         }
 

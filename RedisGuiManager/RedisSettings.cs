@@ -9,6 +9,10 @@ using StackExchange.Redis;
 
 namespace RedisGuiManager
 {
+	/// <summary>
+	/// Marker type used as the Tag of a key node in the server tree; the key's name lives in the
+	/// node text. Not to be confused with <see cref="StackExchange.Redis.RedisKey"/>.
+	/// </summary>
 	public class RedisKey
 	{
     }

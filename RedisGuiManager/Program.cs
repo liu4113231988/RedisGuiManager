@@ -16,6 +16,9 @@ namespace RedisGuiManager
             Application.ThreadException += (sender, e) => ReportCrash(e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (sender, e) => ReportCrash(e.ExceptionObject as Exception);
 
+            // A batch killed mid-run leaves its key manifest behind; sweep the stale ones on start.
+            FormMain.CleanupStaleBatchManifests();
+
             Application.Run(new FormMain());
         }
 

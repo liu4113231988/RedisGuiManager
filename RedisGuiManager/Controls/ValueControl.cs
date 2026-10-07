@@ -95,6 +95,13 @@ namespace RedisGuiManager
                 Utils.DarkThemeControl(this);
             }
 
+            // A hand-edited or corrupt config.json must not push an out-of-range value into the enum;
+            // fall back to Text so dpType and the radio buttons stay in sync.
+            if (Config.dp_type < (int)DisplayType.Text || Config.dp_type > (int)DisplayType.Hex)
+            {
+                Config.dp_type = (int)DisplayType.Text;
+            }
+
             dpType = (DisplayType)Config.dp_type;
 
             switch (dpType)
@@ -190,7 +197,9 @@ namespace RedisGuiManager
                     {
                         try
                         {
-                            textBox_value.Text = JsonConvert.DeserializeObject(value.ToString()).ToString();
+                            // Re-serialise with indentation so the JSON view really formats the value;
+                            // the previous .ToString() round trip produced compact output.
+                            textBox_value.Text = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(value.ToString()), Newtonsoft.Json.Formatting.Indented);
                         }
                         catch (Exception)
                         {

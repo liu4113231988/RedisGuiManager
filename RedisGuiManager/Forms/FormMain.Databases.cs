@@ -292,9 +292,11 @@ namespace RedisGuiManager
             // each holds its own manifest.
             if (batchRunning) return;
             batchRunning = true;
-            string manifest = Path.Combine(Path.GetTempPath(), "redisgui-batch-" + Guid.NewGuid().ToString("N") + ".jsonl");
+            string manifest = null;
             try
             {
+                manifest = CreateBatchManifestPath();
+
                 var previewOutcome = await OperationDialog.RunAsync(this, "Preview " + title, (token, progress) =>
                 {
                     long count = 0;
@@ -344,7 +346,51 @@ namespace RedisGuiManager
                 batchRunning = false;
                 // The manifest lists every matched key in clear text; make sure it never survives a
                 // failure of the delete itself.
-                try { if (File.Exists(manifest)) File.Delete(manifest); } catch { }
+                try { if (manifest != null && File.Exists(manifest)) File.Delete(manifest); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Batch runs stream the keys the user confirmed into a temporary manifest, so the execute
+        /// pass works on exactly that set. They are kept in a dedicated folder: a crash skips the
+        /// finally block, and a known location can be swept on the next start instead of leaving an
+        /// untraceable credential-shaped file loose in the shared temp directory.
+        /// </summary>
+        private static string BatchManifestDirectory => Path.Combine(Path.GetTempPath(), "RedisGuiManager");
+
+        private static string CreateBatchManifestPath()
+        {
+            Directory.CreateDirectory(BatchManifestDirectory);
+            return Path.Combine(BatchManifestDirectory, "batch-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        }
+
+        /// <summary>
+        /// Deletes manifests orphaned by a crash or a kill. Only files older than an hour are touched
+        /// so a batch still running in another instance is never disturbed.
+        /// </summary>
+        internal static void CleanupStaleBatchManifests()
+        {
+            try
+            {
+                string dir = BatchManifestDirectory;
+                if (Directory.Exists(dir) == false) return;
+
+                DateTime cutoff = DateTime.UtcNow.AddHours(-1);
+                foreach (string file in Directory.GetFiles(dir, "batch-*.jsonl"))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(file) < cutoff) File.Delete(file);
+                    }
+                    catch
+                    {
+                        // A manifest still open by another instance cannot be deleted; leave it.
+                    }
+                }
+            }
+            catch
+            {
+                // Startup cleanup is best effort and must never block the application.
             }
         }
 

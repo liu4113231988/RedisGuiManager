@@ -102,6 +102,25 @@ namespace RedisGuiManager
                     // CONFIG GET, CLIENT LIST or XINFO STREAM are only recognised with their subcommand.
                     if (client.Settings.read_only && Utils.IsReadOnlyCommandAllowed(textBox_input.Text) == false)
                         throw new InvalidOperationException($"[{cmd}] is not allowed in read-only mode");
+
+                    // SELECT is connection-scoped: sending it through the shared multiplexer would
+                    // switch the database for every other window, so switch only the local pointer.
+                    if (string.Equals(cmd, "SELECT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (args.Length == 1 && int.TryParse(args[0], out int selectedDb) && selectedDb >= 0)
+                        {
+                            db_num = selectedDb;
+                            redis = client.GetDB(db_num);
+                            label_cur.Text = $"{client.Settings.name}:{db_num}>";
+                            AppendOutput("OK\r\n");
+                        }
+                        else
+                        {
+                            AppendOutput("ERR invalid DB index\r\n");
+                        }
+                    }
+                    else
+                    {
                     var result = redis.Execute(cmd, args);
                     if (result.IsNull)
 					{
@@ -177,18 +196,11 @@ namespace RedisGuiManager
 					}
 
                     AppendOutput($"\r\n");
+                    }
                 }
                 catch (Exception ex)
 				{
                     AppendOutput(ex.Message + "\r\n");
-                }
-
-                // Only a command that actually ran may move the local db pointer. In read-only mode
-                // SELECT is rejected, so switching anyway would silently redirect every later
-                // command to a database the user never picked.
-                if (Utils.IsReadOnlyCommandAllowed(textBox_input.Text))
-                {
-                    check_change_db(textBox_input.Text);
                 }
 
                 textBox_input.Text = "";
@@ -251,16 +263,7 @@ namespace RedisGuiManager
 			}
 		}
 
-        private void check_change_db(string text)
-		{
-            var m = Regex.Match(text, "^select (?<db_num>[\\d]+)");
-            if (m.Success)
-			{
-                db_num = int.Parse(m.Groups["db_num"].Value);
-                redis = client.GetDB(db_num);
-                label_cur.Text = $"{client.Settings.name}:{db_num}>";
-            }
-		}
+
 
         public void SetRedis(RedisClient client)
         {

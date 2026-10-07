@@ -295,13 +295,51 @@ namespace RedisGuiManager
 
         public void RefreshRenamedKey(TreeNode node, string oldName, string newName)
         {
-            var dbNode = GetDbNode(node);
-            var settings = (DbSettings)dbNode.Tag;
+            TreeNode dbNode = GetDbNode(node);
+            if (dbNode?.Tag is not DbSettings settings) return;
+
             settings.Keys.Remove(oldName);
-            settings.Keys.Add(newName);
-            node.Text = newName;
+            if (settings.Keys.Contains(newName) == false) settings.Keys.Add(newName);
+
             CreateRedisShowTagControl<StartControl>();
-            RunGuardedAsync(() => SelectNodeAsync(node));
+
+            // A rename can change the key's prefix and therefore the folder it belongs to, so the
+            // tree is rebuilt instead of just relabelling the old node.
+            FilterKeys(dbNode);
+            dbNode.ExpandAll();
+
+            TreeNode renamed = FindKeyNode(dbNode, newName);
+            if (renamed != null)
+            {
+                treeView_server.SelectedNode = renamed;
+            }
+            else
+            {
+                RunGuardedAsync(() => SelectNodeAsync(dbNode));
+            }
+        }
+
+        /// <summary>
+        /// Finds the tree node for a key after the folder tree was rebuilt. Folder children are built
+        /// lazily, so the folder that owns the key is materialised on the way down.
+        /// </summary>
+        private TreeNode FindKeyNode(TreeNode root, string keyName)
+        {
+            foreach (TreeNode child in root.Nodes)
+            {
+                if (child.Tag is RedisKey && child.Text == keyName) return child;
+
+                if (child.Tag is RedisFolder folder && folder.sub_items != null
+                    && folder.sub_items.Any(pair => pair.Value == keyName))
+                {
+                    BuildTreeNode_Folder(child);
+                    child.Expand();
+                    TreeNode found = FindKeyNode(child, keyName);
+                    if (found != null) return found;
+                }
+            }
+
+            return null;
         }
 
         public void delete_key_operate(TreeNode select, IDatabase database)
