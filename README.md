@@ -53,7 +53,11 @@ and an optional read-only mode. Read-only mode
 blocks GUI writes and restricts console commands; server-side permissions remain
 controlled by the Redis ACL user.
 
-Key browsing loads 500 keys at a time. Hash, List, Set, Sorted Set and Stream
+Key browsing loads 500 keys at a time. Selecting a tree node only moves the
+highlight; a double-click (or Enter while the tree has focus) loads its children,
+and a key opens its value editor. The progress window is revealed only after an
+operation has been running for 250 ms, so quick scans finish without a window
+flashing on screen. Hash, List, Set, Sorted Set and Stream
 viewers show 500 entries per page; their search applies to the current page.
 SCAN pages reflect live data, so refreshing is advisable when records change.
 SQL queries expose adjustable limits for keys per database and rows per key;

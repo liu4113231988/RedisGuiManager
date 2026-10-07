@@ -3,10 +3,11 @@
     Publishes RedisGuiManager as a self-contained, single-folder Windows x64 ZIP.
 
 .DESCRIPTION
-    Produces the artifact described in version-1.4.0.md: a self-contained build that carries its
+    Produces the artifact described in version-1.5.0.md: a self-contained build that carries its
     own .NET runtime, so the target machine does not need .NET installed. The native SQLite
-    interop DLL and the redis.ico are verified to be present in the output, because the query
-    window fails at runtime without SQLite.Interop.dll.
+    interop DLL is verified to be present in the output, because the query window fails at runtime
+    without it. The application icon is compiled into the executable through ApplicationIcon, so no
+    separate .ico file has to ship next to it.
 
 .PARAMETER Configuration
     Build configuration. Defaults to Release.
