@@ -270,6 +270,52 @@ namespace RedisGuiManager
             return exists;
         }
 
+        // ---------- SLOWLOG ----------
+
+        /// <summary>
+        /// SLOWLOG GET, including the client address and client name.
+        /// <see cref="IServer.SlowlogGet"/> maps the reply onto CommandTrace, which drops the two
+        /// client fields, so the raw reply is parsed here instead. Redis only reports them from
+        /// 4.0 onwards; older servers return four fields per entry and leave these blank.
+        /// </summary>
+        public static IReadOnlyList<SlowlogEntryInfo> SlowlogEntries(IServer server, int count)
+        {
+            if (server == null) throw new ArgumentNullException(nameof(server));
+
+            var entries = new List<SlowlogEntryInfo>();
+            foreach (string line in ToStringArray(server.Execute("SLOWLOG", "GET", Math.Max(1, count))))
+            {
+                // Each entry is itself a flat "value:value" block.
+                var fields = ParseKeyValueLines(line);
+
+                string arguments = fields.TryGetValue("command", out var command) ? command : "";
+
+                entries.Add(new SlowlogEntryInfo(
+                    ParseLong(fields, "id"),
+                    ParseTimestamp(fields, "time"),
+                    TimeSpan.FromMicroseconds(ParseLong(fields, "duration")),
+                    arguments,
+                    fields.TryGetValue("client_address", out var address) ? address : "",
+                    fields.TryGetValue("client_name", out var name) ? name : ""));
+            }
+
+            return entries;
+        }
+
+        private static long ParseLong(IReadOnlyDictionary<string, string> fields, string name)
+        {
+            return fields.TryGetValue(name, out string value) && long.TryParse(value, out long parsed)
+                ? parsed
+                : 0;
+        }
+
+        private static DateTime ParseTimestamp(IReadOnlyDictionary<string, string> fields, string name)
+        {
+            return fields.TryGetValue(name, out string value) && long.TryParse(value, out long seconds)
+                ? DateTimeOffset.FromUnixTimeSeconds(seconds).LocalDateTime
+                : DateTime.MinValue;
+        }
+
         // ---------- HELPERS ----------
 
         /// <summary>
@@ -350,6 +396,30 @@ namespace RedisGuiManager
                 ? string.Format(CultureInfo.InvariantCulture, "{0} {1}", bytes, units[unit])
                 : string.Format(CultureInfo.InvariantCulture, "{0:F2} {1}", size, units[unit]);
         }
+    }
+
+    /// <summary>One SLOWLOG entry, including the client fields the managed API does not surface.</summary>
+    public readonly struct SlowlogEntryInfo
+    {
+        public SlowlogEntryInfo(long id, DateTime time, TimeSpan duration, string arguments, string clientAddress, string clientName)
+        {
+            Id = id;
+            Time = time;
+            Duration = duration;
+            Arguments = arguments;
+            ClientAddress = clientAddress;
+            ClientName = clientName;
+        }
+
+        public long Id { get; }
+        public DateTime Time { get; }
+        public TimeSpan Duration { get; }
+        public string Arguments { get; }
+        public string ClientAddress { get; }
+        public string ClientName { get; }
+
+        /// <summary>Redis omits the name when the client did not set one via CLIENT SETNAME.</summary>
+        public string DisplayName => string.IsNullOrWhiteSpace(ClientName) ? "(unnamed)" : ClientName;
     }
 
     /// <summary>One row of CLUSTER NODES, flattened for display.</summary>

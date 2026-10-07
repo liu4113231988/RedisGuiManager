@@ -263,5 +263,21 @@ namespace RedisGuiManager.Tests
             Assert.Throws<ArgumentNullException>(() => RedisOps.SentinelSlaves(null, ""));
             Assert.Throws<ArgumentNullException>(() => RedisOps.ScriptExists(null, new[] { "abc" }));
         }
+
+        [Fact]
+        public void SlowlogEntryInfo_labels_an_unnamed_client()
+        {
+            var named = new SlowlogEntryInfo(1, DateTime.Now, TimeSpan.FromMilliseconds(1), "GET k", "1.2.3.4:5678", "app");
+            var unnamed = new SlowlogEntryInfo(2, DateTime.Now, TimeSpan.FromMilliseconds(1), "GET k", "1.2.3.4:5678", "");
+
+            Assert.Equal("app", named.DisplayName);
+            Assert.Equal("(unnamed)", unnamed.DisplayName);
+        }
+
+        [Fact]
+        public void Slowlog_helpers_reject_a_missing_server()
+        {
+            Assert.Throws<ArgumentNullException>(() => RedisOps.SlowlogEntries(null, 10));
+        }
     }
 }

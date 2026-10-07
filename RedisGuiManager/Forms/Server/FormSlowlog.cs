@@ -39,25 +39,25 @@ namespace RedisGuiManager
             try
             {
                 int count = (int)numericUpDown_count.Value;
-                var entries = redisClient.RedisServer.SlowlogGet(count);
+
+                // Parsed from the raw reply because the managed API drops the client fields.
+                var entries = RedisOps.SlowlogEntries(redisClient.RedisServer, count);
 
                 dataGridView_slowlog.Rows.Clear();
 
                 foreach (var entry in entries)
                 {
-                    string args = string.Join(" ", entry.Arguments.Select(a => a.ToString()));
-
                     dataGridView_slowlog.Rows.Add(
-                        "-",
-                        entry.Time.ToString("yyyy-MM-dd HH:mm:ss"),
+                        entry.Id.ToString(),
+                        entry.Time == DateTime.MinValue ? "-" : entry.Time.ToString("yyyy-MM-dd HH:mm:ss"),
                         FormatDuration(entry.Duration),
-                        args,
-                        "-",
-                        "-"
+                        entry.Arguments,
+                        string.IsNullOrEmpty(entry.ClientAddress) ? "-" : entry.ClientAddress,
+                        entry.DisplayName
                     );
                 }
 
-                label_count_val.Text = entries.Length.ToString();
+                label_count_val.Text = entries.Count.ToString();
             }
             catch (Exception ex)
             {
