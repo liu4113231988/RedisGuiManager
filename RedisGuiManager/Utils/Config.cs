@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.IO;
+using System.Windows.Forms;
 using Newtonsoft.Json;
 
 namespace RedisGuiManager
@@ -22,14 +23,44 @@ namespace RedisGuiManager
         {
         }
 
+        // Keep settings next to the executable, matching how connection files are stored.
+        // A relative path made the settings file depend on the current working directory.
+        public static string ConfigPath =>
+            overridePath ?? Path.Combine(Application.StartupPath, "config.json");
+
+        /// <summary>
+        /// Redirects <see cref="ConfigPath"/>. Used by tests so they never touch the real user
+        /// settings file; null restores the default location.
+        /// </summary>
+        public static string OverridePath
+        {
+            get => overridePath;
+            set => overridePath = value;
+        }
+
+        private static string overridePath;
+
         public static void Load()
         {
-            if (File.Exists("config.json") == false)
+            foreach (string path in CandidatePaths())
             {
-                return;
-            }
+                if (File.Exists(path) == false) continue;
 
-            string config_json = File.ReadAllText("config.json");
+                try
+                {
+                    string config_json = File.ReadAllText(path);
+                    LoadFrom(config_json);
+                    return;
+                }
+                catch (Exception)
+                {
+                    // Fall through and try the next candidate (usually the .bak written on save).
+                }
+            }
+        }
+
+        private static void LoadFrom(string config_json)
+        {
             var json = JsonConvert.DeserializeObject<Dictionary<string, object>>(config_json);
             if (json == null)
             {
@@ -78,9 +109,54 @@ namespace RedisGuiManager
             dic_config.Add("mainform_height", mainform_height);
             dic_config.Add("darkmode", darkmode);
             string save_string = JsonConvert.SerializeObject(dic_config).ToString();
-            save_string = JsonConvert.DeserializeObject(save_string).ToString();
 
-            File.WriteAllText("config.json", save_string);
+            string path = ConfigPath;
+            try
+            {
+                string dir = Path.GetDirectoryName(path);
+                if (string.IsNullOrEmpty(dir) == false && Directory.Exists(dir) == false)
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                // Write to a temporary file first, then swap it in, so a crash mid-write
+                // can never leave a truncated settings file behind.
+                string tmp = path + ".tmp";
+                File.WriteAllText(tmp, save_string, Encoding.UTF8);
+                if (File.Exists(path))
+                {
+                    File.Replace(tmp, path, path + ".bak");
+                }
+                else
+                {
+                    File.Move(tmp, path);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Save failed for {path}\r\n{ex.Message}");
+            }
+        }
+
+        // The current file, its backup, and the legacy working-directory-relative file.
+        private static IEnumerable<string> CandidatePaths()
+        {
+            string path = ConfigPath;
+            string bak = path + ".bak";
+            string legacy = Path.GetFullPath("config.json");
+
+            foreach (string candidate in new[] { path, bak })
+            {
+                if (string.Equals(candidate, legacy, StringComparison.OrdinalIgnoreCase) == false)
+                {
+                    yield return candidate;
+                }
+            }
+
+            if (File.Exists(legacy))
+            {
+                yield return legacy;
+            }
         }
     }
 }
