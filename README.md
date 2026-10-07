@@ -13,10 +13,43 @@ This tool is very fast.
 This can find key, value, hash value by sql query.  
 Enjoy.  
 
+## Requirements
+
+- Windows and .NET 10 (`net10.0-windows`). The published ZIP is self-contained and needs no
+  separate .NET installation.
+- Some operations use optional server capabilities: Lua for atomic edits and snapshot restore,
+  Stream commands for stream keys, and Redis 7.0+ for `LCS`.
+
+## Features
+
+- **Connections**: standalone, Redis Cluster (multiple seed endpoints) and SSL/TLS, with optional
+  SSH tunnelling. Settings carry a Redis ACL username (blank uses the default user) and a read-only
+  flag. Connections are stored as `connections/*.json` next to the executable and can be organised
+  into groups.
+- **Key browsing and editing**: String, Hash, List, Set, Sorted Set and Stream, 500 entries per page,
+  and TTL view / set / remove. Keys can be renamed, copied across databases or servers, and deleted
+  or migrated in batches.
+- **Snapshot import / export (JSON)**: exports every key of a database with an authoritative `dump`
+  payload plus a best-effort readable `type`/`value`; imports restore through the dump, skip existing
+  keys and keep the TTL.
+- **SQL query window**: search keys and values of a database with SQL-style queries over a bounded
+  snapshot.
+- **Server insight**: server info dashboard, server tools (`CONFIG`, `CLIENT`, `MEMORY`,
+  persistence, `CLUSTER`, `SENTINEL`), slowlog, and stream consumer groups.
+- **Pub/Sub**: subscribe to channels or patterns (`*`, `?`, `[`), publish messages, and watch
+  keyspace notifications for every database.
+- **String tools**: interpret string-encoded structures with `BITCOUNT`, `BITPOS`, `GETRANGE`,
+  `PFCOUNT`, `PFMERGE` and `LCS`.
+- **Console**: run raw commands with history. In read-only mode only non-mutating commands are
+  accepted.
+- **Localization**: English and Simplified Chinese (`zh-Hans`) UI text.
+- **Credential protection**: saved passwords are encrypted with Windows DPAPI for the current user;
+  older plaintext configuration is read and re-encrypted on the next save.
+
 ## Runtime and operation controls
 
-Requires .NET 10 on Windows. Connection settings include a Redis ACL username
-(blank uses the default user) and an optional read-only mode. Read-only mode
+Connection settings include a Redis ACL username (blank uses the default user)
+and an optional read-only mode. Read-only mode
 blocks GUI writes and restricts console commands; server-side permissions remain
 controlled by the Redis ACL user.
 
@@ -37,6 +70,28 @@ compare the loaded value atomically, Set edits check the original member still
 exists, and Sorted Set edits check its original score. Conflicts retain edits
 for review rather than overwrite newer data. Use Reload server to reconnect;
 failed writes keep the input available.
+
+Settings (`config.json`) and connection files are written atomically and keep a `.bak` backup, and a
+corrupt settings file falls back to its backup instead of being treated as empty.
+
+## Build and test
+
+```powershell
+dotnet build RedisGuiManager.sln
+dotnet test  tests/RedisGuiManager.Tests.csproj
+dotnet run   --project checks/RegressionChecks.csproj
+```
+
+`checks/RegressionChecks.csproj` is a WinForms smoke-check runner (STA). It also exercises live Redis
+when the `REDIS_CHECK_ENDPOINT` environment variable points at a disposable test server, and skips
+those checks otherwise. Continuous integration builds the solution, runs the unit tests and the
+smoke checks on Windows; see `.github/workflows/ci.yml`.
+
+Publish a self-contained Windows x64 ZIP:
+
+```powershell
+./scripts/publish.ps1 -Configuration Release -Runtime win-x64
+```
 
 ## LICENSE
 
